@@ -1,0 +1,314 @@
+/* CSS StyleSheet by Andrea Stewart and Brad Huffman for AUV Data Viewer */
+
+/* Selector Tips: 
+  . == class
+  # == id
+  * == all elements
+ "," allows you to set a {} property to multiple elements
+  " " sets a {} property to the element inside an element
+  etc. -> https://www.w3schools.com/cssref/css_selectors.asp 
+*/
+
+/* Import Universal Condensed into .css */
+@font-face {
+  /* Assign Font Family Name */
+  font-family: 'UniversCond';
+  /* .woff Files are located in the same directory as the .css file
+  >> point to the unv-cond .woff and format it as a web open font format */
+  src: url('Univers-Condensed.woff') format('woff');
+}
+
+/* Import Universal Condensed Bold into .css */
+@font-face {
+  /* Assign Font Family Name */
+  font-family: 'UniversCondBold';
+  /* .woff Files are located in the same directory as the .css file
+  >> point to the unv-cond-bold .woff and format it as a web open font format */
+  src: url('univers-condensedbold.woff') format('woff');
+  /* Set the font family weight as bold */
+  font-weight: bold;
+}
+
+/* Body is the entirety of the webpage div */
+body {
+  /* Make the background color black */
+  background: #000000;
+  /* Use the defined font from the woff file.  If it cant find the font use sans-serif. */
+  font-family: 'UniversCond', Fallback, sans-serif;
+}
+
+/* Header div holding the picture and Webpage Title (Water RAT) */
+.head {
+  /* Allow screen to adjust when view pane shrinks */
+  display: flex;
+  /* Set the header to be some percent of the viewport height  */
+  height: 40vh;
+  min-height: 30vh;
+  /* Overlay a black gradient from the top (transparent) to bottom (opaque) of the ysi ecomapper image */
+  background: linear-gradient(to bottom, rgba(0, 0, 0, 0), rgba(0, 0, 0, 1)), url('http://www.studiogeologitst.com/uploads/images/page/services/ysi-ecomapper-d84f11a2fe352462a8d8496435645e161a8fe72b.jpg');
+  /* Lock the Background image to the top left corner and dont allow it to repeat */
+  background-position: left top;
+  background-repeat: no-repeat;
+  /* Span across the avaliable width */
+  background-size: 100%;
+  /* Set the background color to black */
+  background-color: rgb(0, 0, 0);
+  /* Center the text box vertically in the div */
+  align-items: center;
+  /* Center the text box across the page */
+  justify-content: center;
+  /* Use the Universal Condensed Bold font for the header title box */
+  font-family: 'UniversCondBold';
+}
+
+/* Interior of box holding header title div */
+.head-text {
+  /* Make the border of the box a white line 1 pixel width wide */
+  border: 1px solid rgb(255, 255, 255);
+  /* Give the contents of the box padding in all directions */
+  padding: 20px;
+  /* Make the box 50% of the width of the header */
+  width: 50%;
+  /* Make the header text white */
+  color: rgb(255, 255, 255);
+  /* Force the text to center in the div */
+  text-align: center;
+  /* Set the background color with a transparency */
+  background: rgba(204, 204, 204, 0.25);
+}
+
+/* Refer to the sub landing paragraph, upper figures, lower figures and about divs */
+.section , #upper-graphs , #lower-graphs, .about-row {
+  /* Add padding to the bottom of the divs */
+  padding-bottom: 20px;
+}
+
+/* Sub landing paragraph div */
+.section-text {
+  /* Set the text color */
+  color: rgb(255, 255, 255);
+  /* Align the text in the center of the div */
+  text-align: center;
+  /* Set the top and bottom margins and the left and right margins */
+  margin: auto 10%;
+}
+
+/* Div around everything below head and section */
+#content {
+  /* Add padding to the left and right */
+  padding-left: 20px;
+  padding-right: 20px;
+}
+
+/* Topo Map div */
+#topo-box {
+  /* Set the font size of the topo title */
+  font-size: 25px;
+  /* Set the text color */
+  color: white;
+ }
+
+ /* Parameter dropdown div */
+#main-param {
+  /* Set position relative to its unmodified state */
+  position: relative;
+  /* Set dropbox height */
+  height: 37px;
+  border: none;
+  border-radius: 4px;
+}
+
+/* Checkbox div */
+#checkboxes {
+  /* Set checkbox text as white */
+  color: white;
+}
+
+/* Checkbox text */
+#checkboxes label{
+  /* Alter the top and right margins */
+  margin: 5px 25px 0px 0px;
+}
+
+/* Checkbox box */
+#checkboxes input{
+  /* Alter the right margin */
+  margin-right: 3px;
+}
+
+/* Slider Titles */
+.slider-label {
+  /* Set font size */
+  font-size: 20px;
+  /* Set text color */
+  color: rgb(255, 255, 255);
+}
+
+#slider-x-parent .rc-slider, #slider-z-parent .rc-slider, #slider-y-parent .rc-slider {
+  position: relative;
+  padding: 50px 0 100px 0;
+  border-radius: 6px;
+  box-sizing: border-box;
+  -webkit-tap-highlight-color: rgba(0, 0, 0, 0);
+  left: calc(99.9999% * 0.07143);
+}
+
+#slider-x-parent .rc-slider-rail, #slider-z-parent .rc-slider-rail, #slider-y-parent .rc-slider-rail {
+  position: absolute;
+  height: 4px;
+  background-color: #393939;
+  width: calc(99.9999% * 0.85714);
+}
+
+/* Slider step and tick marks */
+.rc-slider-step {
+  /* Position relative to nearest ancestor */
+  position: absolute;
+  /* Set the width to total width of the rc-slider-step div */
+  width: 100%;
+}
+
+/* Slider main marker */
+.rc-slider-mark {
+  /* Position relative to nearest ancestor */
+  position: absolute;
+  /* Set the width to total width of the rc-slider-mark div */
+  width: 100%;
+}
+
+.rc-slider-handle {
+  position: absolute;
+  margin-left: -6px;
+  margin-top: -16px;
+  width: 6px;
+  height: 40px;
+  cursor: pointer;
+  border-radius: 4px;
+  border: solid 2px #96dbfa;
+  background-color: #33ccbc;
+}
+
+.rc-slider-dot {
+  position: absolute;
+  bottom: -6px;
+  margin-left: -4px;
+  width: 4px;
+  height: 16px;
+  border: 2px solid #e9e9e9;
+  background-color: #fff;
+  cursor: pointer;
+  border-radius: 4px;
+  vertical-align: middle;
+}
+
+.rc-slider-dot-active {
+  border-color: #96dbfa;
+}
+
+.rc-slider-mark-text {
+  /* Position relative to nearest ancestor */
+  position: absolute;
+  /* Set display where margings and padding are respected and text labels dont overlap */
+  display: inline-block;
+  /* Vertical align and horizontal align the text */
+  vertical-align: middle;
+  text-align: center;
+  /* Make the hovering cursor a pointed index finger */
+  cursor: pointer;
+  /* Set a margin on top to keep labels away from the slider */
+  margin-top: 70px;
+  /* Marker text label color */
+  color: #999;
+  /* Marker text label font size */
+  font-size: 16px;
+}
+
+#up-bound div P, #lo-bound div P{
+  color: rgb(255, 255, 255);
+  text-align: right;
+  vertical-align: middle;
+  position: relative;
+  left: 15px;
+  top: 7px;
+}
+
+#commit-button {
+  color: rgb(0,0,0);
+  background: rgb(150, 150, 150);
+  border: none;
+  border-radius: 4px;
+  text-align: center;
+  vertical-align: middle;
+  position: relative;
+  font-family: 'UniversCond';
+  width: 65%;
+}
+
+#valid-prompt {
+  background: rgb(0, 0, 0);
+  color: rgb(255, 0, 0);
+  text-align: center;
+  vertical-align: middle;
+  font-family: 'UniversCond';
+  position: relative;
+  border: none;
+  width: 150px;
+  resize: none;
+}
+
+#cbar-ubound , #cbar-lbound {
+  border: none;
+  border-radius: 4px;
+  text-align: center;
+  vertical-align: middle;
+  float: left;
+  width: 65%;
+  font-family: 'UniversCond';
+  position: relative;
+  top: 7px;
+}
+
+#cbar-img img{
+  display: block;
+  margin-left: auto;
+  margin-right: auto;
+}
+
+#content-colorbar {
+  position: relative;
+  top: -2px;
+}
+
+#content-colorbar.stick {
+  position: fixed;
+  top: 25px;
+  right: 4px;
+}
+
+/* Developers Title div */
+#developers div P {
+  /* Set text color as yellow */
+  color: yellow;
+}
+
+/* USGS link and logo div */
+#sawsc-link , #sawsc-img {
+  /* Set the display as a block (for images) */
+  display: block;
+  /* Align the contents to the right */
+  text-align: right;
+  /* Set the width of the div */
+  width: 100%;
+  margin: 0px;
+}
+
+/* Dash web app undo button */
+._dash-undo-redo {
+  /* Turn off the display */
+  display: none;
+}
+
+.dash-spinner {
+  position: relative;
+  top: 150px;
+}

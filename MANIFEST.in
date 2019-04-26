@@ -1,0 +1,4 @@
+include *.txt
+include *.ini
+include *.md
+include waterrat/assets/*
