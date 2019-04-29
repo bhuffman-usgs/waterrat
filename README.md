@@ -5,7 +5,11 @@ WaterRAT is a Python application designed for 3D visualizations of data collecte
 
 Version Info: This package is still in a development state with potentially frequent modifcations, please check the versionUpdates.txt file found in the "docs" folder in the WaterRAT repository.
 
-The application was developed in Python 3.6 on a Windows 10 Operating System and is a work in progress. The package is being released as preliminary software; please see the Disclaimer section for complete details. Currently, the application functions for a study area on the Little Back River in Savannah, GA. See "Initial Parameters" for information on how to change the location.
+The application was developed in Python 3.6 on a Windows 10 Operating System and is a work in progress. The package is being released as preliminary software; please see the Disclaimer section for complete details. Currently, the application functions for a small study area along the Savannah River in Savannah, GA. See "Initial Parameters" for information on how to change the location.
+
+## Example Data
+
+Examples of datasets that can be viewed using the WaterRAT are available at https://doi.org/10.5066/P9TT9C9T
 
 ## How to Install Python 3.6 (and up)
 
