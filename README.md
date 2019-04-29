@@ -1,11 +1,11 @@
 Waterbody Rapid Assessment Tool (WaterRAT) 1.0
 ===============
 
-WaterRAT is a Python application designed for 3D visualizations of data collected by [autonomous underwater vehicles (AUVs)](https://www.usgs.gov/centers/oki-water/science/autonomous-underwater-vehicles-auv?qt-science_center_objects=0#qt-science_center_objects) operated by the [United States Geological Survey](https://www.usgs.gov/). The application, distributed as a Python package, is run at the command line and is viewed in a compatible web browser under the address "localhost:8050" or "127.0.0.1:8050". This repository contains the compiled install file (tarball) for the package and a configuration file. 
+WaterRAT is a Python application designed for 3D visualizations of data collected by [autonomous underwater vehicles (AUVs)](https://www.usgs.gov/centers/oki-water/science/autonomous-underwater-vehicles-auv?qt-science_center_objects=0#qt-science_center_objects) operated by the [United States Geological Survey](https://www.usgs.gov/). The application, distributed as a Python package, is run at the command line and is viewed in a compatible web browser under the address "localhost:8050" or "127.0.0.1:8050". This repository contains the structure to form a packaged version of the application including a configuration file necessary in its operation. 
 
 Version Info: This package is still in a development state with potentially frequent modifcations, please check the release notes.
 
-The application was developed in Python 3.6 on a Windows 10 Operating System. It is a work in progress. The package is being released as preliminary software; please see the Disclaimer section for complete details. Currently, the application functions for a study area on the Little Back River, Savannah, GA. See "Initial Parameters" for information on how to change the location.
+The application was developed in Python 3.6 on a Windows 10 Operating System and is a work in progress. The package is being released as preliminary software; please see the Disclaimer section for complete details. Currently, the application functions for a study area on the Little Back River in Savannah, GA. See "Initial Parameters" for information on how to change the location.
 
 ## How to Install Python 3.6 (and up)
 
@@ -22,8 +22,10 @@ The application was developed in Python 3.6 on a Windows 10 Operating System. It
 ## How to Install the WaterRAT Package
 
 1. Press the Win + R keys, type "cmd" (without quotations) in the box, and press "OK." The command line will open.
-2. Type "pip install git+https://github.com/bhuffman-usgs/waterrat" (without quotations).
-3. The WaterRAT package will install. All dependencies will be installed automatically.
+2. Type "conda create -n vepy python" (without quotations).  This will create a virtual environment named "vepy" to install the WaterRAT package to.
+3. When the virtual environment is done being created, type "conda activate vepy" (without quotations).
+4. Type "pip install git+https://github.com/bhuffman-usgs/waterrat" (without quotations).  The WaterRAT package will begin installing, including all its dependency packages.
+5. 
 
 ## How to Start the Web Application
 
