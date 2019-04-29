@@ -1,4 +1,4 @@
-Waterbody Rapid Assessment Tool (WaterRAT) 1.0
+Waterbody Rapid Assessment Tool (WaterRAT) 1.0.0
 ===============
 
 WaterRAT is a Python application designed for 3D visualizations of data collected by [autonomous underwater vehicles (AUVs)](https://www.usgs.gov/centers/oki-water/science/autonomous-underwater-vehicles-auv?qt-science_center_objects=0#qt-science_center_objects) operated by the [United States Geological Survey](https://www.usgs.gov/). The application, distributed as a Python package, is run at the command line and is viewed in a compatible web browser under the address "localhost:8050" or "127.0.0.1:8050". This repository contains the structure to form a packaged version of the application including a configuration file necessary in its operation. 
