@@ -3,7 +3,7 @@ Waterbody Rapid Assessment Tool (WaterRAT) 1.0
 
 WaterRAT is a Python application designed for 3D visualizations of data collected by [autonomous underwater vehicles (AUVs)](https://www.usgs.gov/centers/oki-water/science/autonomous-underwater-vehicles-auv?qt-science_center_objects=0#qt-science_center_objects) operated by the [United States Geological Survey](https://www.usgs.gov/). The application, distributed as a Python package, is run at the command line and is viewed in a compatible web browser under the address "localhost:8050" or "127.0.0.1:8050". This repository contains the structure to form a packaged version of the application including a configuration file necessary in its operation. 
 
-Version Info: This package is still in a development state with potentially frequent modifcations, please check the release notes.
+Version Info: This package is still in a development state with potentially frequent modifcations, please check the versionUpdates.txt file found in the "docs" folder in the WaterRAT repository.
 
 The application was developed in Python 3.6 on a Windows 10 Operating System and is a work in progress. The package is being released as preliminary software; please see the Disclaimer section for complete details. Currently, the application functions for a study area on the Little Back River in Savannah, GA. See "Initial Parameters" for information on how to change the location.
 
@@ -23,19 +23,19 @@ The application was developed in Python 3.6 on a Windows 10 Operating System and
 
 1. Press the Win + R keys, type "cmd" (without quotations) in the box, and press "OK." The command line will open.
 2. Type "conda create -n vepy python" (without quotations).  This will create a virtual environment named "vepy" to install the WaterRAT package to.
-3. When the virtual environment is done being created, type "conda activate vepy" (without quotations).
-4. Type "pip install git+https://github.com/bhuffman-usgs/waterrat" (without quotations).  The WaterRAT package will begin installing, including all its dependency packages.
-5. 
+3. Type "pip install git+https://github.com/bhuffman-usgs/waterrat" (without quotations).  The WaterRAT package will begin installing, including all its dependency packages.
+4. Visit the "docs" folder in the WaterRAT repository and download the config.ini file for use in the next section.
 
 ## How to Start the Web Application
 
-1. Open Windows File Explorer and navigate to the folder containing the config.ini configuration file.
+1. Open Windows File Explorer and navigate to the folder containing the config.ini file.
 2. Go to the "File" menu and select "Open command prompt" or "Open Windows PowerShell."
-3. Type "python" (without quotation marks) into the command prompt and press enter. If you see ">>>" in the command prompt, the Python interperter is now running and you may proceed.
+3. Activate the virtual environment created in the previous section by typing "conda activate vepy" (without quotations).
+3. Now type "python" (without quotations) into the command prompt and press enter. If you see ">>>" in the command prompt, the Python interperter is now running and you may proceed.
 4. Type "import waterrat.suite as wrs" (without quotations) and press enter.
 5. Type "wrs.appRun()" (without quotations) and press enter. The application will start.
 6. A window will pop up and you will be prompted to select a data file. Select the AUV data file (CSV file type).
-7. Open a web browser (Google Chrome is recommended) and go to the following website: localhost:8050
+7. Open a web browser (Google Chrome is recommended) and go to the following url: "localhost:8050"
 
 ## Initial Parameters
 
@@ -82,8 +82,8 @@ If you encounter errors, please review the following notes.
 *  Git must be installed to install WaterRAT. Please follow the above directions ("How to Install Git").
 *  WaterRAT will not work with Python version 2.x. Follow the above directions to install Python 3.x ("How to Install Python") and be sure to select the "Add Anaconda to my PATH environment variable" option during installation. 
 *  When starting the application, you must run the command prompt from the same folder where the config.ini folder is located. 
-*  The WaterRAT application currently works only for the Savannah River site. To view other sites the thalweg lat/longs will need to be edited in the config.ini file (see "Parameters related to the thalweg" above).
-*  The AUV data input file should be a comma-seperated file.
+*  The WaterRAT application currently only works for the Savannah River site. To view other sites the thalweg lat/lons will need to be edited in the config.ini file (see "Parameters related to the thalweg" above).
+*  The AUV data input file should be a comma-seperated file obtained from an applicable USGS Data Release.
 
 ## Security
 
