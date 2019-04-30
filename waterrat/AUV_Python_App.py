@@ -151,12 +151,12 @@ dat_df = pd.read_csv(data_fname)
 del data_fname
 
 # Assign data in df to variables
-zone = utm.from_latlon(dat_df['Latitude'][0], dat_df['Longitude'][0])
+zone = utm.from_latlon(dat_df['DDLat'][0], dat_df['DDLong'][0])
 zone = str(zone[2]) + zone[3]
 # Generate a projection to convert lat/lon to easting/northing (meters) based on the UTM zone and the WGS84 ellipsoid
 p = pyproj.Proj(proj = 'utm', zone = zone, ellps = 'WGS84')
 # Apply the projection
-x, y = p(dat_df['Longitude'].values, dat_df['Latitude'].values)
+x, y = p(dat_df['DDLong'].values, dat_df['DDLat'].values)
 
 ### Step 1: Filter data by specific waypoints ###
 # cstep = dat_df['Current Step'].values + 1
