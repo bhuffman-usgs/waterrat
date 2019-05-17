@@ -2,432 +2,16 @@
 import matplotlib
 matplotlib.use('Agg')
 from matplotlib import pyplot as plt
-import os, sys, pyproj, utm, re, inspect
+import sys, re, inspect
 import tkinter as tk
 from tkinter.filedialog import askopenfilename
 from tkinter.messagebox import showerror
-import plotly as plty
 import plotly.graph_objs as go
 import numpy as np
-from numpy import multiply as mm, divide as md, sqrt as msqrt, square as ms, power as mpow
+from numpy import multiply as mm, sqrt as msqrt, square as ms
 from io import BytesIO
 import base64
-from datetime import datetime
-from math import floor
-from random import sample as randomSample
-from cefpython3 import cefpython as cef
-import ctypes
-
-class processDataframe(object):
-
-    def __init__(self, dataframe):
-        self.dataframe = dataframe
-
-    def columnDrop(self, keys):
-        if type(keys) == list:
-            for key in keys:
-                try:
-                    self.dataframe.drop(key, axis = 1, inplace = True)
-                except KeyError:
-                    pass
-        else:
-            print('Failed at line %i.' % inspect.currentframe().f_back.f_lineno)
-            print('Variable keys must be in a list.')
-            sys.exit(0)
-
-    def columnDropStartsWith(self, keys):
-        if type(keys) == list:
-            [self.dataframe.drop(column, axis = 1, inplace = True) for k in keys for column in self.dataframe if column.startswith(k)]
-        else:
-            print('Failed at line %i.' % inspect.currentframe().f_back.f_lineno)
-            print('Variable keys must be in a list.')
-            sys.exit(0)
-
-    def columnTryRename(self, keys, newKeys):
-        if (type(keys) == list) and (type(newKeys) == list):
-            for k, nk in zip(keys, newKeys):
-                try:
-                    _ = self.dataframe[k]
-                    self.dataframe.rename(columns = {k: nk}, inplace = True)
-                except KeyError:
-                    pass
-        else:
-            print('Failed at line %i.' % inspect.currentframe().f_back.f_lineno)
-            print('Variables keys and newKeys must be lists.')
-            sys.exit(0)
-
-    def columnTryConvert(self, keys, convKeys, conversions):
-        if (type(keys) == list) and (type(convKeys) == list) and (type(conversions) == list):
-            for k, ck, c in zip(keys, convKeys, conversions):
-                try:
-                    _ = self.dataframe[k].values
-                except KeyError:
-                    try:
-                        self.dataframe[k] = self.dataframe[ck].values*c
-                        del self.dataframe[ck]
-                    except KeyError:
-                        print('Failed at line %i.' % inspect.currentframe().f_back.f_lineno)
-                        print(''.join(["No data for columns '", k, "' and '", ck, "'."]))
-        else:
-            print('Failed at line %i.' % inspect.currentframe().f_back.f_lineno)
-            print('Variables keys, newKeys and converions must be lists.')
-            sys.exit(0)
-
-    def columnMerge(self, keyOne, seperator, keyTwo):
-        self.dataframe[' '.join([keyOne, keyTwo])] = self.dataframe[keyOne] + seperator + self.dataframe[keyTwo]
-
-    def secondsFromEpoch(self, key, keyFormat):
-        # Get the date time data as a numpy array
-        date = self.dataframe[key].values
-        # Convert the first date string into seconds since 1/1/1970 00:00:00
-        date[0] = (datetime.strptime(date[0], keyFormat) - datetime(1970, 1, 1)).total_seconds() 
-        # Loop over the remaining date strings
-        for i in range(1, len(date), 1):
-            # Convert the date string into seconds 1/1/1970 00:00:00 and make relative to the first logged time
-            date[i] = (datetime.strptime(date[i], keyFormat) - datetime(1970, 1, 1)).total_seconds() - date[0]
-        # Reassign the date time column as the seconds since 1/1/1970 00:00:00
-        self.dataframe[key] = date.astype(float)
-
-    def coordinateCorrection(self):
-        # Store the uncorrected latitude and longitude in the dataframe
-        self.dataframe[' '.join(['Latitude', 'Uncorrected'])] = self.dataframe['Latitude'].values
-        self.dataframe[' '.join(['Longitude', 'Uncorrected'])] = self.dataframe['Longitude'].values
-        # Get the lat/lon and number of satellites data as numpy arrays
-        lat = self.dataframe['Latitude'].values
-        lon = self.dataframe['Longitude'].values
-        nSatellite = self.dataframe['Number of Sats'].values
-        # Extract the UTM zone from the coordinates
-        zone = utm.from_latlon(lat[0], lon[0])
-        zone = str(zone[2]) + zone[3]
-        # Generate a projection to convert lat/lon to easting/northing (meters) based on the UTM zone and the WGS84 ellipsoid
-        p = pyproj.Proj(proj = 'utm', zone = zone, ellps = 'WGS84')
-        # Apply the projection
-        x, y = p(lon, lat)
-        # Get the distances between consecutive (x, y) points
-        trackDiff = euc_dist(x, y)
-        # Get the change in satellites that the AUV is currently locked onto
-        satelliteDiff = np.append(np.zeros(10), (np.asarray(nSatellite[10:]) - np.asarray(nSatellite[:-10])))
-        # Get indices where the AUV traveled further than 3 meters between points AND when there was a positive jump in locked satellites
-        #   This indicates that the AUV missed its target waypoint when it surfaced
-        booIndex = mm((trackDiff >= 3), (satelliteDiff != 0))
-        driftIndex = np.where(booIndex == True)[0]
-        # Clear memory
-        del zone, trackDiff, satelliteDiff, booIndex
-        # If there is no indication of drifting notify the user
-        if len(driftIndex) == 0:
-            print("No drifting was found to occur in the survey.")
-        # If drifting was found to occur...
-        else:
-            # Get the current step data as a numpy array
-            currentStep = self.dataframe['Current Step'].values
-            # Make the dive step and index variable list where the dive step is equal to the step before driting occured
-            #   and the dive index are the indices where the dive step occured at in the data log
-            diveList = [[(currentStep[index] - 1), np.where(currentStep == (currentStep[index] - 1))[0]] for index in driftIndex]
-            # Enumerate the possible dive indicies
-            for i, diveItem in enumerate(diveList):
-                # Unpack the dive step and index from the dive list
-                step = diveItem[0]
-                index = diveItem[1]
-                # Loop while the number satellites is equal to zero (the AUV is under water)
-                while nSatellite[index[0]] == 0:
-                    # Move the step back one
-                    step -= 1
-                    # Again find the indices where this step occured at in the data log
-                    index = np.where(currentStep == step)[0]
-                # Overwrite the current diveList item with the first indice in the dive index list
-                diveList[i] = index[0]
-            # Convert the list to a integer type numpy array and rename the variable
-            diveIndex = np.asarray(diveList, dtype = int)
-            # Clear memory
-            del nSatellite, currentStep, diveList, step
-            # Generate the WGS84 ellipsoid
-            wgs = pyproj.Geod(ellps = 'WGS84')
-            # Copy the longitude and latitude data to a numpy array
-            latCorrected = np.copy(lat)
-            lonCorrected = np.copy(lon)
-            # Loop over the dive and drift indices
-            for i, j in zip(diveIndex, driftIndex):
-                # Determine the AUV's heading and distance to, between the dive and drift location
-                diveHeading, _, diveDiff = wgs.inv(lon[i], lat[i], lon[j], lat[j])
-                # Make an index vector that ranges from the dive to drift indices
-                index = np.arange((i + 1), j, 1)
-                # Discretize the distance from the dive to drift location
-                dDiff = (diveDiff/len(index))
-                # Initialize the total distance variable
-                tDist = dDiff
-                # Loop over the index vector
-                for ii in index:
-                    # Use the lat/lon corresponding to the dive index AND the dive heading and distance from the dive to correct the lat/lon coordinates
-                    lonCorrected[ii], latCorrected[ii], _ = wgs.fwd(lon[i], lat[i], diveHeading, tDist)
-                    # Go to the next location along the drifted track
-                    tDist += dDiff
-            # Store the corrected lat/lon coordinates
-            self.dataframe['Latitude'] = latCorrected
-            self.dataframe['Longitude'] = lonCorrected
-            # Store the corrected lat/lon coordinates as UTM coordinates in feet
-            x, y = p(lonCorrected, latCorrected)
-        self.dataframe['X (ft)'] = x*3.28084
-        self.dataframe['Y (ft)'] = y*3.28084
-
-    def depthCorrection(self, offset):
-        # Add an offset to the water column and dfs depth columns in the dataframe
-        self.dataframe['Total Water Column (ft)'] = self.dataframe['Total Water Column (ft)'].values + offset
-        self.dataframe['DFS Depth (ft)'] = self.dataframe['DFS Depth (ft)'].values + (offset/2)
-
-    def distanceCompute(self):
-        # Get the X and Y coordinate data as numpy arrays
-        x = self.dataframe['X (ft)'].values
-        y = self.dataframe['Y (ft)'].values
-        # Get the current step data as a numpy array and add one step to get a destination step
-        destinationStep = self.dataframe['Current Step'].values + 1
-        # Get the total number of waypoints in the log
-        nWaypoints = max(destinationStep)
-        # Initialize the distance array
-        diffDist = np.empty((0,))
-        # Loop over each waypoint step
-        for i in np.arange(1, (nWaypoints + 1), 1):
-            # Get the indices where the current waypoint step matches
-            ii = np.where(destinationStep == i)[0]
-            # Get the cummulative distance from the current waypoint
-            diffDist = np.append(diffDist, np.cumsum(euc_dist(x[ii], y[ii])))
-        # Store the differential distances between points, the distance travel since the start
-        #   and the distance traveled between waypoints
-        self.dataframe['Distance Between (ft)'] = euc_dist(x, y)
-        self.dataframe['Track Distance (ft)'] = np.cumsum(euc_dist(x, y))
-        self.dataframe['Distance From Waypoint (ft)'] = diffDist      
-
-    def pressureSalinityDensityCompute(self):
-        try:
-            self.dataframe['Pressure (dbar)'], self.dataframe['Salinity (ppt)'] = comp_press_sal(self.dataframe['SpCond uS/cm'].values/1000, self.dataframe['Temp C'].values, self.dataframe['DFS Depth (ft)'].values/3.28084, self.dataframe['Latitude'].values)
-        except KeyError:
-            self.dataframe['SpCond uS/cm'] = np.zeros(len(self.dataframe[0]))
-            self.dataframe['Pressure (dbar)'], self.dataframe['Salinity (ppt)'] = comp_press_sal(self.dataframe['SpCond uS/cm'].values, self.dataframe['Temp C'].values, self.dataframe['DFS Depth (ft)'].values/3.28084, self.dataframe['Latitude'].values)
-            print('No specific conductance data present, values set to 0 for computing pressure, salinity and density.')
-        self.dataframe['Density (kg/m3)'] = comp_dens(self.dataframe['Salinity (ppt)'].values, self.dataframe['Temp C'].values, self.dataframe['Pressure (dbar)'].values)
-        
-    def graphRawData(self, figureList, labelList, figureOption):
-        if not hasattr(self, 'matPlotLib'):
-            self.matPlotLib = plt
-        if not hasattr(self, 'figureNumber'):
-            self.figureNumber = 1
-        for plot, label in zip(figureList, labelList):
-            fig = self.matPlotLib.figure(self.figureNumber)
-            if figureOption == 0:
-                subLocation = len(plot)*100 + 11
-                passed = False
-                for subPlot in plot:
-                    try:
-                        if not passed:
-                            ax = fig.add_subplot(subLocation)
-                        ax.plot(self.dataframe[subPlot[0]].values*subPlot[2], subPlot[3])
-                        ax.yaxis.set_label_text(subPlot[1])
-                        subLocation += 1
-                        passed = False
-                    except KeyError:
-                        passed = True
-                        pass
-                ax.xaxis.set_label_text(label)
-            elif figureOption == 1:
-                ax = fig.add_subplot(111)
-                for subPlot in plot:
-                    try:
-                        ax.plot(self.dataframe[subPlot[0]].values*subPlot[2], subPlot[3], label = subPlot[1])
-                    except KeyError:
-                        pass
-                ax.xaxis.set_label_text(label[0])
-                ax.yaxis.set_label_text(label[1])
-                ax.legend()
-            self.figureNumber += 1
-    
-    # Method to run the robust lowess filtering algorithm on the selected keys in the dataframe used
-    #   each window size in the input window size range.  When the algorithm is done, a interactive
-    #   gui is displayed to the user to select which window size filter is appropriate for each key
-    #   in the dataframe.
-    def graphSmoothData(self, yKeys, windowSizes):
-        # Make an ordered list of window sizes to run the robust lowess filter
-        windows = np.arange(windowSizes[0], windowSizes[1] + 0.1, 1)
-        # Initialize the filtered data list and an array to identify if a key was used
-        yFiltered = []
-        keyUsed = np.zeros(len(yKeys), dtype = np.bool)
-        # Loop over the keys (parameters)
-        for i, yKey in enumerate(yKeys):
-            # Attempt to filter this parameter
-            try:
-                # Initialize the temporary filtered data list
-                yFilteredTemp = []
-                # For each window size run the robust lowess filter and store the
-                #   filtered data to the temporary list
-                for window in windows:
-                    yf = robustLowess(self.dataframe[yKey].values, window)
-                    yFilteredTemp.append(yf)
-                # Store the filtered data for this parameter
-                yFiltered.append(yFilteredTemp)
-                # Key was found in the dataset
-                keyUsed[i] = 1
-            except KeyError:
-                print(''.join(["Smoothing: No data column '", yKey, "' found."]))
-                # Key was not found in the dataset
-                keyUsed[i] = 0
-        # Subset the yKeys list based on what data was present
-        yKeys = np.asarray(yKeys)
-        usedKeys = yKeys[keyUsed].tolist()
-        # Build the tkinter html embedded frame (before CEF is started)
-        h = 240 + 20*len(windows)
-        if h > 1000: h = 1000
-        smooth = smoothingFrame(createRoot('Smoothing Window Selection', 1400, h), self.dataframe, usedKeys, yFiltered, windows)
-        # Start up CEF
-        cef.Initialize()
-        # Run the gui
-        smooth.mainloop()
-        # When the gui is closed, shut down CEF
-        cef.Shutdown()
-        # Check if the smoothing gui was exited properly
-        if smooth.closedProperly:
-            # If so then update the data with the chosen filtered data
-            for key, data, choice in zip(usedKeys, yFiltered, smooth.choices):
-                # Check if the data was chosen to be smoothed
-                if choice != -1:
-                    self.dataframe[key] = data[choice]
-        else:
-            print('Failed at line %i.' % inspect.currentframe().f_back.f_lineno)
-            print('The smoothing GUI was closed improperly.\nSelect a smoothing option and click the "Done Smoothing" button when finished.')
-            sys.exit(0)
-
-######################### Class Definitions #########################
-# This class creates an html embedded tkinter frame (plotly compatible)
-#   inside the initial root along with functional radio buttons and
-#   an next/exit button for selecting smoothing windows
-class smoothingFrame(tk.Frame):
-    def __init__(self, root, dataframe, keys, filtered, windows):
-        # Lock the frame's size
-        root.resizable(False, False)
-        # Initialize this class object using root and tk.Frame.__init__ (gain its properties)
-        tk.Frame.__init__(self, root)
-        # Bind the windows close button with the onClose method
-        self.master.protocol("WM_DELETE_WINDOW", self.onClose)
-        # Define a variable to determine how the frame was closed
-        self.closedProperly = False
-        # Define the choice storage 
-        self.choices = np.full(len(keys), -1, dtype = int)
-        # Set a global variable from the radio buttons to assign their values to
-        self.var = tk.IntVar()
-        # Loop over the window sizes and create a radio button, linking it with self.var
-        opt = tk.Radiobutton(self, text = 'No Smoothing', variable = self.var, value = -1)
-        opt.grid(row = 1, column = 1)
-        for i, window in enumerate(windows):
-            opt = tk.Radiobutton(self, text = ''.join(['n = ', str(int(window))]), variable = self.var, value = i)
-            opt.grid(row = i + 2, column = 1)
-        # Create a button to go to the next parameter or exit the smoothing frame
-        tk.Button(self, text = "Done Smoothing", command = self.onDone).grid(row = len(windows) + 2, column = 1, padx = 10)
-        # Initialize the html embedded frame using the html file path
-        self.plotFrame = self.browserFrame(self, dataframe, keys, filtered, windows)
-        # Finalize the frame layout
-        self.plotFrame.grid(row = 0, column = 0, rowspan = len(windows) + 4, sticky = tk.NSEW, ipadx = 10, padx = 10, pady = 10)
-        self.grid_rowconfigure(0, weight = 1)
-        self.grid_rowconfigure(len(windows) + 3, weight = 1)
-        self.grid_columnconfigure(0, weight = 1)
-        self.grid_columnconfigure(1, weight = 0)
-        self.pack(fill = tk.BOTH, expand = tk.YES)
-
-    # Method to cleanly close the gui 
-    def onClose(self):
-        if self.plotFrame.control:
-            if self.plotFrame:
-                if self.plotFrame.browser:
-                    self.plotFrame.browser.CloseBrowser(True)
-                    self.plotFrame.browser = None
-                self.plotFrame.destroy()
-            self.master.destroy()
-
-    # Method to store the chosen filter data index and go to
-    #   the next paramter index.  If there are no parameters left
-    #   close the gui
-    def onDone(self):
-        self.choices[self.plotFrame.paramIndex] = self.var.get()
-        if (self.plotFrame.paramIndex + 1) == len(self.plotFrame.keys):
-            self.closedProperly = True
-            self.onClose()
-        else:
-            self.plotFrame.paramIndex += 1
-            self.plotFrame.control = False
-
-    # This subclass creates the html embedded tkinter frame and populates it
-    #   within the main frame
-    class browserFrame(tk.Frame):
-        def __init__(self, root, dataframe, keys, filtered, windows):
-            # Initialize the cef loop controller
-            self.control = False
-            # Store the dataframe, keys, filtered data, windows and set the
-            #   current parameter index
-            self.dataframe = dataframe
-            self.keys = keys
-            self.filtered = filtered
-            self.windows = windows
-            self.paramIndex = 0
-            # Create the plotly graph for the raw data and all the associated filtered data
-            self.buildPlot()
-            # Set the path to the plotly graph
-            self.htmlFile = ''.join([os.getcwd(), '\\multi-smooth-plot.html'])
-            # Initialize this subclass object using root and tk.Frame.__init__ (gain its properties)
-            tk.Frame.__init__(self, root)
-            # Bind the loading of the html frame with the configureBrowser method
-            self.bind("<Configure>", self.configureBrowser)
-
-        # Method to build the CEF browser within the html frame
-        def configureBrowser(self, _):                 
-            # Set up the cef browser id and size
-            winfo = cef.WindowInfo()
-            winfo.SetAsChild(self.winfo_id(), [0, 0, self.winfo_width(), self.winfo_height()])
-            # Link the browser to the plotly graph
-            self.browser = cef.CreateBrowserSync(winfo, url = self.htmlFile)
-            # Allow the cef loop to run and start it
-            self.control = True
-            self.handleMessages()
-
-        # Method to construct the plotly graph for the raw data and associated filtered data
-        def buildPlot(self):
-            # Create an ordered index list
-            x = np.arange(0, len(self.dataframe.index), 1)
-            # Initialize the figure data list
-            figureData = []
-            # Add the raw data scatter point data to the figure
-            figureData.append(go.Scatter(
-                x = x, y = self.dataframe[self.keys[self.paramIndex]].values,
-                name = 'Raw Data', mode = 'markers', 
-                marker = dict(color = 'rgb(255, 0, 0)', size = 5)
-            ))
-            # Add the filtered data (by window size) to the figure
-            for d, window in zip(self.filtered[self.paramIndex], self.windows):
-                figureData.append(go.Scatter(
-                    x = x, y = d,
-                    name = ''.join(['n = ', str(int(window))]), mode = 'lines', 
-                    line = dict(color = randomColorHex(), width = 3)
-                ))
-            # Modify the figure layout
-            figureLayout = go.Layout(
-                font = dict(family = 'PT Sans Narrow', size = 12),
-                xaxis = dict(title = 'Sample Number', range = [-1, len(self.dataframe.index)], linecolor = 'rgb(0, 0, 0)', linewidth = 1, mirror = True),
-                yaxis = dict(title = self.keys[self.paramIndex], linecolor = 'rgb(0, 0, 0)', linewidth = 1, mirror = True)
-            )
-            # Create the figure and save it to file
-            figure = go.Figure(data = figureData, layout = figureLayout)
-            plty.offline.plot(figure, filename = 'multi-smooth-plot.html', auto_open = False)
-
-        # Method to run the message/event loop for CEF
-        def handleMessages(self):
-            cef.MessageLoopWork()
-            if self.control:
-                # Continue the message/event loop
-                self.after(10, self.handleMessages)
-            else:
-                # User has hit the done smoothing button and the next parameter
-                #   is to be viewed.  Rebuild the plotly graph and load it to the
-                #   browser.  Continue the message/event loop
-                self.buildPlot()
-                self.browser.LoadUrl(self.htmlFile)
-                self.control = True
-                self.after(10, self.handleMessages)
-        
+      
 # This class allows a user to replace sub-string(s) in the original string based on regular expression pattern(s)
 #   Requires the following group names in the regex pattern(s): prefix, keep, edit, and suffix
 #     where the edit group will be replaced in the replace method
@@ -537,7 +121,7 @@ class case_load(object):
         map = np.asarray([[0.4000, 0, 0.2000], [0.4786, 0, 0.2333], [0.5571, 0, 0.2667], [0.6357, 0, 0.3000], [0.7143, 0, 0.3333], [0.7929, 0, 0.3667], [0.8406, 0.0914, 0.4101], [0.8781, 0.2132, 0.4569], [0.9156, 0.3350, 0.5038], [0.9531, 0.4568, 0.5506], [0.9906, 0.5786, 0.5974], [1.0000, 0.6351, 0.6351], [1.0000, 0.6698, 0.6698], [1.0000, 0.7045, 0.7045], [1.0000, 0.7393, 0.7393], [1.0000, 0.7740, 0.7740]])
         comp_map = [22, 170, 127]
         bounds = [0, 90, 95, 100, 105, 110, 115, 120, 125, 130, 135, 140, 145, 150, 155, 160]
-        res = [1]
+        res = [2]
         return var, label, unit, unit_short, map, comp_map, bounds, res
     def load_3(self, arg1):
         var = np.asarray(arg1['pH'])
@@ -547,7 +131,7 @@ class case_load(object):
         map = np.asarray([[0, .4, .6], [0, .5, .7], [0, .6, .8], [0, .7, .9], [0, .8, 1], [.2667, .9333, .8667], [.4, 1, .8], [.2902, .8902, .6902], [.0706, .6706, .4706], [0, .6, .45], [0, .5216, .4], [0, .45, .4], [0, .4, .4], [0, .2, .2]])
         comp_map = [181, 28, 79]
         bounds = [0, 5.5, 5.7, 5.9, 6.1, 6.3, 6.5, 6.7, 6.9, 7.1, 7.3, 7.5, 7.7, 7.9]
-        res = [0.1]
+        res = [0.2]
         return var, label, unit, unit_short, map, comp_map, bounds, res
     def load_4(self, arg1):
         var = np.asarray(arg1['Turbid NTU'])
@@ -577,19 +161,29 @@ class case_load(object):
         map = np.asarray([[0, .2824, 0], [0, .3765, 0], [0, .4902, 0], [0, .6157, 0], [0, .7373, 0], [0, .8275, 0], [0, .9412, 0], [0, 1, 0], [.6, 1, .6]])
         comp_map = [255, 67, 255]
         bounds = [0, 5, 10, 15, 20, 25, 30, 35, 40]
-        res = [1]
+        res = [0.1]
         return var, label, unit, unit_short, map, comp_map, bounds, res
     def load_7(self, arg1):
         var = np.asarray(arg1['BGA-PC cells/mL'])
-        label = 'Cyanobacteria'
+        label = 'Cyanobacteria Phycocyanin'
         unit = 'Cells per Milliliter'
         unit_short = 'cells/mL'
         map = np.asarray([[0, 0, .549], [0, .294, .549], [0, .392, .588], [0, .588, .784], [0, .588, .686], [0, .627, .588], [0, .588, .353], [0, .686, .353], [.392, .784, 0], [.706, .882, .111], [.882, .98, .294], [.98, .98, .627]])
         comp_map = [255, 105, 165]
         bounds = [0, 2000, 4000, 6000, 8000, 10000, 12000, 14000, 16000, 18000, 20000, 22000]
-        res = [500]
+        res = [210]
         return var, label, unit, unit_short, map, comp_map, bounds, res
     def load_8(self, arg1):
+        var = np.asarray(arg1['BGA-PE cells/mL'])
+        label = 'Cyanobacteria Phycoerythrin'
+        unit = 'Cells per Milliliter'
+        unit_short = 'cells/mL'
+        map = np.asarray([[0, 0, .549], [0, .294, .549], [0, .392, .588], [0, .588, .784], [0, .588, .686], [0, .627, .588], [0, .588, .353], [0, .686, .353], [.392, .784, 0], [.706, .882, .111], [.882, .98, .294], [.98, .98, .627]])
+        comp_map = [255, 105, 165]
+        bounds = [0, 2000, 4000, 6000, 8000, 10000, 12000, 14000, 16000, 18000, 20000, 22000]
+        res = [160]
+        return var, label, unit, unit_short, map, comp_map, bounds, res
+    def load_9(self, arg1):
         var = np.asarray(arg1['Rhodamine ug/L'])
         label = 'Rhodamine'
         unit = 'Micrograms per Liter'
@@ -631,8 +225,9 @@ def dict_load(argument):
         "Turb" : 4,
         "DO" : 5,
         "Chl" : 6,
-        "BGA" : 7,
-        "Rhod" : 8
+        "BGA-PC" : 7,
+        "BGA-PE" : 8,
+        "Rhod" : 9
         # "Sal" : 9,
         # "Dens" : 10
     }
@@ -658,190 +253,6 @@ def createRoot(title, w, h):
     root.title(title)
     # Return the built tkinter window object
     return root
-
-# Function to compute pressure [db] (from depth [m] and latitude) and salinity [PSU~ppt] (from pressure, specific conductance[mS/cm] and water temperature[degC])
-def comp_press_sal(SpC, tempC, dep, lat):
-    ### Calculate the pressure ###
-    # Set up variable for radians
-    rad = (np.pi/180) 
-    # Convert latitude to radians
-    xx = ms(np.sin(abs(lat)*rad))
-    # Set constants
-    AA = 1 - ((5.92 + (5.25*xx))*.001)
-    BB = 2.21e-6
-    # Compute the pressure based on the latitude and depth 
-    press = (AA - msqrt((ms(AA) - (4*BB*dep))))/(2*BB)
-    # Clear memory
-    del rad, xx, AA, BB
-    ##############################
-
-    # Set the temperature coeff. based on the YSI sonde manual (pg. 217)
-    TC = 0.0191
-    # Inverted equation for Specific Conductance at 25 deg C based on the YSI sonde manual (pg.217)
-    Cond = mm(SpC, ((TC*(tempC - 25)) + 1))
-    # Reference conductivity for water at a temperature of 15 deg C, 0 decibar of pressure and salinity equal to 35 psu (practical salinity unit)
-    c3515 = 42.914
-    # Set the conductivity ratio
-    c_r = (Cond/c3515)
-    del TC, Cond, c3515
-
-    ### Calculate salinity (with a low salinity correction) ###
-    # Set constants and compute the conductivity ratio (temperature polynomial)
-    c0 =  0.6766097
-    c1 =  2.00564e-2
-    c2 =  1.104259e-4
-    c3 = -6.9698e-7
-    c4 =  1.0031e-9
-    rt = c0 + mm((c1 + mm((c2 + mm((c3 + (c4*tempC)), tempC)), tempC)), tempC)
-    # Clear memory
-    del c0, c1, c2, c3, c4
-
-    # Set constants and compute the conductivity ratio (pressure polynomial)
-    d1 =  3.426e-2
-    d2 =  4.464e-4
-    d3 =  4.215e-1
-    d4 = -3.107e-3
-    e1 =  2.070e-5
-    e2 = -6.370e-10
-    e3 =  3.989e-15
-    rp = 1 + md(mm(press, (e1 + (e2*press) + (e3*ms(press)))), (1 + (d1*tempC) + (d2*ms(tempC)) + mm((d3 + (d4*tempC)), c_r)))
-    # Clear memory
-    del d1, d2, d3, d4, e1, e2, e3
-
-    # Set the conductivity ratio
-    r = md(c_r, mm(rp, rt))
-    # Clear memory
-    del c_r, rp, rt
-
-    # Set constants and compute the salinity
-    a0 =  0.0080
-    a1 = -0.1692
-    a2 =  25.3851
-    a3 =  14.0941
-    a4 = -7.0261
-    a5 =  2.7081
-    b0 =  0.0005
-    b1 = -0.0056
-    b2 = -0.0066
-    b3 = -0.0375
-    b4 =  0.0636
-    b5 = -0.0144
-    k = 0.0162
-    rtx = msqrt(r)
-    del_t = (tempC - 15)
-    del_s = mm(md(del_t, (1 + (k*del_t))), (b0 + mm((b1 + mm((b2 + mm((b3 + mm((b4 + (b5*rtx)), rtx)), rtx)), rtx)), rtx)))
-    S = a0 + mm((a1 + mm((a2 + mm((a3 + mm((a4 + (a5*rtx)), rtx)), rtx)), rtx)), rtx) + del_s
-    # Clear memory
-    del a0, a1, a2, a3, a4, a5, b0, b1, b2, b3, b4, b5, k, rtx, del_t, del_s
-
-    # Set constants and correct for low salinity
-    a0 = 0.008
-    b0 = 0.0005
-    x0 = 400*r
-    y0 = 100*r
-    f0 = md((tempC - 15), (1 + (0.0162*(tempC - 15))))
-    S_corr = (a0/(1 + (1.5*x0) + ms(x0))) + md((b0*f0), (1 + msqrt(y0) + mm(y0, msqrt(y0))))
-    S = S - S_corr
-    # Clear memory
-    del a0, b0, x0, y0, f0, S_corr, r
-    ###########################################################
-
-    # Pass back the pressure and salinity
-    return press, S
-
-# Function to compute density [kg/m3] from salinity[psu], temperature[degC] and pressure[dbar]
-def comp_dens(sal, tempC, pres):
-    ### Compute the density of sea water at the surface ###
-    # Set constants and calculate density of pure water
-    a0 =  999.842594
-    a1 =  6.793952e-2
-    a2 = -9.095290e-3
-    a3 =  1.001685e-4
-    a4 = -1.120083e-6
-    a5 =  6.536332e-9
-    dens_pw = a0 + mm((a1 + mm((a2 + mm((a3 + mm((a4 + (a5*tempC)), tempC)), tempC)), tempC)), tempC)
-    # Clear memory
-    del a0, a1, a2, a3, a4, a5
-
-    # Set constants and calculate density of sea water at atmospheric pressure
-    b0 =  8.24493e-1
-    b1 = -4.0899e-3
-    b2 =  7.6438e-5
-    b3 = -8.2467e-7
-    b4 =  5.3875e-9
-    c0 = -5.72466e-3
-    c1 =  1.0227e-4
-    c2 = -1.6546e-6
-    d0 =  4.8314e-4
-    dens_p0 = dens_pw + mm((b0 + mm((b1 + mm((b2 + mm((b3 + (b4*tempC)), tempC)), tempC)), tempC)), sal) + mm((c0 + mm((c1 + (c2*tempC)), tempC)), mm(sal, msqrt(sal))) + (d0*ms(sal))
-    # Clear memory
-    del b0, b1, b2, b3, b4, c0, c1, c2, d0, dens_pw
-    #################################################
-                                                                                                                                                        
-    ### Compute the secant bulk modulus ###
-    # Set constants and compute the compression terms
-    h0 =  3.239908
-    h1 =  1.43713e-3
-    h2 =  1.16092e-4
-    h3 = -5.77905e-7
-    AW = h0 + mm((h1 + mm((h2 + (h3*tempC)), tempC)), tempC)
-    # Clear memory
-    del h0, h1, h2, h3
-
-    k0 =  8.50935e-5
-    k1 = -6.12293e-6
-    k2 =  5.2787e-8
-    BW = k0 + mm((k1 + (k2*tempC)), tempC)
-    # Clear memory
-    del k0, k1, k2
-
-    e0 =  19652.21
-    e1 =  148.4206
-    e2 = -2.327105
-    e3 =  1.360477e-2
-    e4 = -5.155288e-5
-    KW = e0 + mm((e1 + mm((e2 + mm((e3 + (e4*tempC)), tempC)), tempC)), tempC)
-    # Clear memory
-    del e0, e1, e2, e3, e4
-
-    # Set constants and compute sea water terms
-    i0 =  2.2838e-3    
-    i1 = -1.0981e-5
-    i2 = -1.6078e-6
-    j0 =  1.91075e-4
-    A = AW + mm((i0 + mm((i1 + (i2*tempC)), tempC)), sal) + (j0*mm(sal, msqrt(sal)))
-    # Clear memory
-    del i0, i1, i2, j0, AW
-
-    m0 = -9.9348e-7
-    m1 =  2.0816e-8
-    m2 =  9.1697e-10
-    B = BW + mm((m0 + mm((m1 + (m2*tempC)), tempC)), sal)
-    # Clear memory
-    del m0, m1, m2, BW
-
-    f0 =  54.6746
-    f1 = -0.603459
-    f2 =  1.09987e-2
-    f3 = -6.1670e-5
-    g0 =  7.944e-2
-    g1 =  1.6483e-2
-    g2 = -5.3009e-4
-    K0 = KW + mm((f0 + mm((f1 + mm((f2 + (f3*tempC)), tempC)), tempC)), sal) + mm((g0 + mm((g1 + (g2*tempC)), tempC)),  mm(sal, msqrt(sal))) 
-    # Clear memory
-    del f0, f1, f2, f3, g0, g1, g2, KW
-
-    # Compute the secant bulk modulus
-    K = K0 + mm((A + mm(B, pres)), pres)
-    del A, B, K0
-    #######################################
-
-    # Compute the density
-    dens = md(dens_p0, (1 - md(pres, K)))
-    del dens_p0, K
-
-    # Pass back the density
-    return dens
 
 # Function to generate a 3D array of alpha values.  Shp corresponds to the size of the 3D array and trans_mode sets the type of array to build
 def voxelAlpha(shp, trans_mode):
@@ -1287,6 +698,17 @@ def fdd(n, m, i):
         # return new m
         return m
 
+# Recursive function to find nearest number above n that m divides with no remainder
+def fdun(n, m, i):
+    # if modulus doesnt equal 0
+    if (n % m) != 0:
+        # call function again using n + i
+        return fdun((n + i), m, i)
+    # if modulus equals 0
+    elif (n % m) == 0:
+        # return new n
+        return n
+
 # Function to find a parametric point that fits on the same line as (x1,y1) and (x2,y2) AND is d1 from (x1,y1) AND is d2 from (x2,y2)
 #   Returns the point that meets this criteria (xn, yn) and the line-intercept coeff. for a perpindicular line to the line through (x1,y1) and (x2,y2) while intersecting at (xn,yn)
 def arb_pnt_btwn(d1, x1, y1, d2, x2, y2):
@@ -1549,60 +971,6 @@ def tickval2text(val):
     # Return the stringafide tick labels
     return txt
 
-# Function to make the required vectors for plotly streamtubes (feeding in tube start and end points)
-#   The utility seems broken in regards to how the user assigns the start and end (bounds) of the 
-#   streamtubes.  Directionality though seems correct. 
-#   (xs, ys) denote the starting point of the arrow, (xe, ye) denote the ending point of the arrow
-def arrow_stem(xs, ys, xe, ye):
-    # Get the directional vectors
-    umag = abs(xe - xs)
-    vmag = abs(ye - ys)
-    # Scale the directions
-    scl = max(umag, vmag)
-    uscl = (xe - xs)/scl
-    vscl = (ye - ys)/scl
-
-    # Make the x grid boundary
-    # Bound must "touch" the starting x value and the other bound must be half the x distance between the x points
-    #   Bounds must be sorted from lowest to highest 
-    gx = xs + ((xe - xs)/2)
-    if gx < xs:
-        gxl = gx
-        gxu = xs
-    else:
-        gxl = xs
-        gxu = gx
-
-    # Make the y grid boundary
-    # Bound must "touch" the starting y value and the other bound must be half the y distance between the y points
-    #   Bounds must be sorted from lowest to highest 
-    gy = ys + ((ye - ys)/2)
-    if gy < ys:
-        gyl = gy
-        gyu = ys
-    else:
-        gyl = ys
-        gyu = gy
-
-    # Make the mesh grid using the x an y bounds and set z's bounds from 0 to 1 (though the tube will be on the z = 0 plane)
-    x, y, z = np.mgrid[gxl:gxu:2j, gyl:gyu:2j, 0:1:2j]
-    # Make the directional grids for u and v using the u scale and v scale computed earlier
-    u = np.ones(x.shape)*uscl
-    v = np.ones(x.shape)*vscl
-    # The w directional grid will be 0 everywhere
-    w = np.zeros(x.shape)
-    
-    # Flatten all the mesh grids into vectors
-    x = x.flatten()
-    y = y.flatten()
-    z = z.flatten()
-    u = u.flatten()
-    v = v.flatten()
-    w = w.flatten()
-
-    # Return the x, y, z, u, v and w vectors for plotly's streamtubes
-    return x, y, z, u, v, w
-
 # Function to build a plotly layout object given axis titles, figure margins, axis ranges and axis tick values and labels
 #   Additionally this figure will have a font of size 10 and family Universal Condensed
 #   And a plot area bounded by a black 1 pt line
@@ -1670,84 +1038,6 @@ def lay_2d(f_title, x_title, y_title, f_margin, x_range, x_tickvals, x_ticktext,
 
     # Return the plotly layout object
     return lay 
-
-# Function to perform a robust lowess filter on the input data
-#   y, assumed to be sequential, using a window of size n away
-#   from the central point
-def robustLowess(y, f, iterations = 3):
-    # Get the number of data points
-    n = len(y)
-    # Build an index list
-    x = np.arange(n)
-    # Set the total number of points in the window
-    winWidth = int((f*2) + 1)
-    # Define the index distance lists for each index move
-    dist = np.abs(x[:, None] - x[None, :])
-    # Define the largest window distance away for each index move
-    maxDist = [np.sort(d)[winWidth] for d in dist]
-    # Form the indice range lists for each index move
-    jRange = [[int(lb), int(ub)] for lb, ub in zip(x - f, x + f + 1)]
-    for j in range(n):
-        if jRange[j][0] < 0:
-            jRange[j][0] = 0
-            jRange[j][1] = winWidth
-        else:
-            break
-    for j in reversed(range(n)):
-        if jRange[j][1] > n:
-            jRange[j][0] = n - winWidth
-            jRange[j][1] = n
-        else:
-            break
-    # Initialize the lowess filtered data as nan
-    yLowess = np.full(y.shape, np.nan)
-    # Begin the iterations loop
-    i = 0
-    while i < iterations:
-        # Step over each index
-        for j, rng, d, h in zip(range(n), jRange, dist, maxDist):
-            # Form the tricubic weight
-            wt = d/h
-            wt = np.clip(wt, 0.0, 1.0)
-            wt = (1 - wt**3)**3
-            # Subset the weight
-            wt = wt[rng[0]:rng[1]]
-            # If this is not first iteration set the robust weights 
-            if i != 0:
-                # Subset the residual
-                r = residual[rng[0]:rng[1]]
-                # Get the MAD value
-                MAD = 6*np.sort(r, axis = None, kind = 'quicksort')[int(f)]
-                # Create the robust weight coefficient
-                G = r/MAD
-                # Form a logic vector
-                boo = np.zeros(winWidth)
-                # Reform the robust weight
-                boo[G < 1] = 1
-                G = boo*((1 - G**2)**2)
-                # Create the final weighting function
-                wt = G*wt
-            # Subset x and y
-            X = x[rng[0]:rng[1]]
-            Y = y[rng[0]:rng[1]]
-            # Make a matrix of the weight vectors to be summed
-            #                 [wt   wtx    wtx2     wty    wtxy  ]
-            sMat = np.asarray([wt,  wt*X,  wt*X*X,  wt*Y,  wt*X*Y])
-            # Sum along the rows
-            sMat = np.nansum(sMat, axis = 1)
-            # Solve for the least squares fit coefficients
-            det = (sMat[0]*sMat[2]) - (sMat[1]*sMat[1])
-            beta0 = ((sMat[2]*sMat[3]) - (sMat[1]*sMat[4]))/det
-            beta1 = ((sMat[0]*sMat[4]) - (sMat[1]*sMat[3]))/det
-            # Compute current lowess value
-            yLowess[j] = beta0 + (x[j]*beta1) 
-        # Compute the residual between the raw and smoothed data
-        residual = abs(y - yLowess)
-        # Next iteration
-        i += 1
-
-    # Return the smoothed data
-    return yLowess
 
 # Function to calculate the area of a triangle with
 #   arbitrary coordinates
@@ -1847,11 +1137,4 @@ def indexByBin(data, bounds):
     
     # Return the nested lists of indices for the binned data
     return bin_idx
-
-def randomColorHex():
-    hexSymbols = ['0', '1', '2', '3', '4', '5', '6', '7', '8', '9', 'A', 'B', 'C', 'D', 'E', 'F']
-    hexColor = '#'
-    for _ in range(6):
-        hexColor = ''.join([hexColor, randomSample(hexSymbols, 1)[0]])
-    return hexColor
 ########################################################################
