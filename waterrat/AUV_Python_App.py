@@ -5,7 +5,7 @@ from matplotlib import pyplot as plt
 from matplotlib.colors import ListedColormap, BoundaryNorm
 from matplotlib.colorbar import ColorbarBase
 import os, sys, pyproj, utm, math, json, configparser
-from .AUV_Python_Func import stringSubReplace, fDialog, find_div, fdd, fdu, indexByBin, areaArbTri, euc_dist, equal_dist, curvey_grid, voxelAlpha, arb_pnt_awy, arrow_stem, case_load, voxelMat, centroid_2D, generateColorbar, tickval2text, lay_2d, mplToURI
+from .AUV_Python_Func import stringSubReplace, fDialog, case_load, voxelAlpha, voxelMat, euc_dist, equal_dist, find_div, fdd, fdun, curvey_grid, centroid_2D, generateColorbar, tickval2text, lay_2d, areaArbTri, mplToURI, indexByBin
 import plotly.graph_objs as go
 from scipy.interpolate import griddata as griddata
 from scipy import interpolate as interp
@@ -89,7 +89,7 @@ config.read(paramPath)
 thal_lat = np.asarray(json.loads(config.get('viewerVariables', 'thal_lat')))
 thal_lon = np.asarray(json.loads(config.get('viewerVariables', 'thal_lon')))
 # PltVar = json.loads(config.get('viewerVariables', 'PltVar'))
-PltVar = ["Temp", "SpCond", "Sal", "Dens", "pH", "Turb", "DO", "Chl", "BGA", "Rhod"]
+PltVar = ["Temp", "SpCond", "Sal", "Dens", "pH", "Turb", "DO", "Chl", "BGA-PC", "BGA-PE", "Rhod"]
 
 # Attempt to load the landmark list variables
 try:
@@ -124,9 +124,6 @@ except Exception as ex:
         sys.exit()
 
 # Load the integer variables
-# WP_s = config.getint('viewerVariables', 'WP_s') 
-# WP_e = config.getint('viewerVariables', 'WP_e') 
-# swid = config.getint('viewerVariables', 'swid')
 swid = 8 
 
 # Load the float variables
@@ -159,14 +156,6 @@ p = pyproj.Proj(proj = 'utm', zone = zone, ellps = 'WGS84')
 x, y = p(dat_df['DDLong'].values, dat_df['DDLat'].values)
 
 ### Step 1: Filter data by specific waypoints ###
-# cstep = dat_df['Current Step'].values + 1
-# # Get the index from the current step data set that matches the starting waypoint
-# idx_s = np.where(cstep == WP_s)[0][0]
-# # Get the index from the current step data set that matches the ending waypoint
-# idx_e = np.where(cstep == WP_e)[0][-1]
-# # Clear variables from memory
-# del WP_s, WP_e, cstep
-
 # Convert x and y (the projections in meters from lat and lon) to feet
 x = x*3.28084
 y = y*3.28084
@@ -177,10 +166,10 @@ d = dat_df['Total Water Column (ft)'].values
 z = -z
 d = -d
 # Truncate x, y, z and d using the filter indexes marking the starting and ending waypoints of interest
-x = x #[idx_s:idx_e]
-y = y #[idx_s:idx_e]
-z = z #[idx_s:idx_e]
-d = d #[idx_s:idx_e]
+x = x
+y = y 
+z = z 
+d = d 
 
 ### Step 2: Produce a curvilinear grid that follows along the thalwag of the site of interest ###
 # Project thalwag lat/lons to the cartesian coordinate plane
@@ -372,8 +361,10 @@ del rounder, thal_d, tck, u, ns, spl_x, spl_y, dist, min_d, max_d, d_if, td
 
 ### Create the x, y and z grid vectors ###
 # Check divisions of river width and set to a division that yields no remainder that is closest to the original division
-if riv_w % dy != 0:
-    dy = find_div(riv_w, dy, 5)
+halfWidth = (riv_w/2)
+if halfWidth % dy != 0:
+    halfWidth = fdun(halfWidth, dy, 1.0)
+    riv_w = halfWidth*2
 # Set number of intervals for the lateral axis
 ny = ((riv_w)/dy) + 1
 while int(ny) < (swid - 1):
@@ -386,9 +377,11 @@ y_cen = ((ygrid_vec.shape[0] - 1)/2)
 # Get a floored even value for the minimum depth (deepest)
 z_floor_even = abs(math.floor(min(z)/2)*2)
 # Set number of intervals for the vertical axis
-if dz < 0.5:
+if dz <= 0.5:
     dz = 0.5
 else:
+    if dz < 1.0:
+        dz = 1.0
     dz = find_div(z_floor_even, dz, 1.0)
 nz = (z_floor_even/dz) + 1
 while int(nz) < (swid - 1):
@@ -438,72 +431,6 @@ alpha = voxelAlpha(xgrid.shape, 1)
 # Remove variables from memory
 del thal_x, thal_y, m_norm, b_norm
 ##########################################################
-
-### Make a plotly cone data type object for a flow direction arrow ###
-# # Attain the two directional vectors in x and y at the end of the domain and find which is larger
-# u_vec = abs(xgrid[-1, y_cen, 0] - xgrid[-2, y_cen, 0])
-# v_vec = abs(ygrid[-1, y_cen, 0] - ygrid[-2, y_cen, 0])
-# vec_div = max(u_vec, v_vec)
-# # Divide the directions by the larger absolute value to get a scaled unit vector
-# u_vec = (xgrid[-1, y_cen, 0] - xgrid[-2, y_cen, 0])/vec_div
-# v_vec = (ygrid[-1, y_cen, 0] - ygrid[-2, y_cen, 0])/vec_div
-# # Get the slope-intercept coef. for a line through the last two points along the thalwag at the end of the domain
-# m_cone = (ygrid[-1, y_cen, 0] - ygrid[-2, y_cen, 0])/(xgrid[-1, y_cen, 0] - xgrid[-2, y_cen, 0])
-# b_cone = ygrid[-1, y_cen, 0] - (m_cone*xgrid[-1, y_cen, 0])
-# # Get an offset point value [dx*3] downstream of the end of the domain for the placement of the arrow
-# x_cone, y_cone, junk, junk= arb_pnt_awy((dx*3), xgrid[-2, y_cen, 0], ygrid[-2, y_cen, 0], m_cone, b_cone, xgrid[-1, -1, 0], ygrid[-1, -1, 0])
-
-# # Make the arrow point as a cone
-# cone_flow = {
-#     'type' : 'cone',
-#     # Set the cone's location at dx*2 past the thalwags end
-#     'x' : [x_cone],
-#     'y' : [y_cone],
-#     # Set the cone at the water surface
-#     'z' : [0],
-#     # Make the cone 2000 times larger than the reference size of the stream tube (sized by vector quantity)
-#     'u' : [u_vec*2000*tube_size],
-#     'v' : [v_vec*2000*tube_size],
-#     'w' : [0],
-#     # Make a hover label for the cone
-#     'text' : 'Flow Direction at Ebb Tide',
-#     'hoverinfo' : 'text',
-#     # Make the cone blue and hide the colorbar
-#     'colorscale' : 'Blues',
-#     'showscale' : False
-# }
-
-# # Make the vectors for defining the arrow stem as a streamtube
-# xst, yst, zst, ust, vst, wst = arrow_stem(xgrid[-1, y_cen, 0], ygrid[-1, y_cen, 0], x_cone, y_cone)
-# # Make the stream tube
-# line_flow = dict(
-#     type = 'streamtube',
-#     # Set the tubes domain and direction (results in a tube running from x1, y1 to x2, y2 used in the arrow_stem function above)
-#     x = xst,
-#     y = yst,
-#     z = zst,
-#     u = ust,
-#     v = vst,
-#     w = wst,
-#     # Set the tube starting point (as the x1, y1 used in the arrow_stem function above)
-#     starts = dict(
-#         x = np.asarray(xgrid[-1, y_cen, 0]),
-#         y = np.asarray(ygrid[-1, y_cen, 0]),
-#         z = np.asarray(0)
-#     ),
-#     # Make a hover text for the tube (same as the arrow)
-#     text = 'Flow Direction at Ebb Tide',
-#     hoverinfo = 'text',
-#     # Set the tubes reference size to the rest of the figure
-#     sizeref = tube_size,
-#     # Make the tube blue and hide the colorbar
-#     colorscale = 'Blues',
-#     showscale = False
-# )
-
-# # Clear the cone and line GO variables
-# del dx, u_vec, v_vec, vec_div, m_cone, b_cone, junk, x_cone, y_cone, xst, yst, zst, ust, vst, wst, tube_size
-################################################################
 
 ### Construct a trace around the curvey grid for the mapbox ###
 # Trim the x, y and z grids down to the outer x and y boundaries and the z boundary to the surface
@@ -990,7 +917,6 @@ app = Dash(__name__)
 #   Dash Core Components (dcc) we use are Graph, Dropdown, Checklist and Slider
 #   Within a dcc if all that is listed is the id that is okay as the callbacks below the
 #     app.layout setup will run and populate those dcc objects
-
 app.layout = html.Div([
     # Landing Header
     html.Div(
@@ -1632,10 +1558,6 @@ def update_3d_traces(param_idx, checkbox_values, cbimg, cb_upper, cb_lower):
             dat1 = voxelMat(ax, xgrid, ygrid, zgrid, master_vargrid[param_idx], alpha, np.asarray(master_colorbar[param_idx][0]), bounds)
             # Remove ax from memory
             del ax
-            
-            # Add the flow direction arrow
-            #dat1.append(cone_flow)
-            #dat1.append(line_flow)
 
             # Extract the x and y positions from the model frame border
             xb = [b[0] for b in border_xy]
@@ -2166,4 +2088,4 @@ def update_slider_z_marks(li, ui):
     return dict(list(zdict.items())[li:ui])
 
 # Fire the dashboard up
-app.run_server(debug=False)
+app.run_server(debug = False)
