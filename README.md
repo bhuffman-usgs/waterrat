@@ -91,7 +91,7 @@ If you encounter errors, please review the following notes.
 
 ## Security
 
-WaterRAT runs locally on your computer and does not interact with the web. Upon running the program, WaterRAT will prompt you to upload a data file. Please be aware that WaterRAT will read this file and save the path to a file in the same directory as the config.ini file for convenience of the user. WaterRAT will not use any sensitive information, such as personally identifiable information, internal system file paths, host names, or IP addresses. The WaterRAT application is not connected to any USGS networks. 
+WaterRAT runs locally on your computer and does not interact with the web. Upon running the program, WaterRAT will prompt you to upload a data file. Please be aware that WaterRAT will read this file and save the path to a file in the same directory as the config.ini file for convenience of the user. WaterRAT will not use any sensitive information, such as personally identifiable information, internal system files, host names, or IP addresses. The WaterRAT application is not connected to any USGS networks. 
 
 ## Disclaimer
 
