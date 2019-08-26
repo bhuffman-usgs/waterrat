@@ -27,7 +27,7 @@ Examples of datasets that can be viewed using the WaterRAT are available at http
 
 1. Press the Win + R keys, type "cmd" (without quotations) in the box, and press "OK." The command line will open.
 2. Type "conda create -n vepy python" (without quotations).  This will create a virtual environment named "vepy" to install the WaterRAT package to.
-3. Activate the virtual environment by typing "activate vepy".  If ever needed, one can deactivate the virtual environment by typing "deactivate".
+3. Activate the virtual environment by typing "conda activate vepy".  If ever needed, one can deactivate the virtual environment by typing "conda deactivate".
 4. Type "pip install git+https://github.com/bhuffman-usgs/waterrat" (without quotations).  The WaterRAT package will begin installing, including all its dependency packages, into the virtual environment created in step 2.
 5. Visit the "docs" folder in the WaterRAT repository and download the config.ini file for use in the next section.
 
