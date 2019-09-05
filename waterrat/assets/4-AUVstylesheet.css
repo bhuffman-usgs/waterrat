@@ -223,7 +223,7 @@ body {
   font-size: 16px;
 }
 
-#up-bound div P, #lo-bound div P{
+#up-bound div P, #lo-bound div P, #aspect_z div P {
   color: rgb(255, 255, 255);
   text-align: right;
   vertical-align: middle;
@@ -266,6 +266,18 @@ body {
   font-family: 'UniversCond';
   position: relative;
   top: 7px;
+}
+
+#aspect_z_input {
+border: none;
+border-radius: 4px;
+text-align: center;
+vertical-align: middle;
+float: left;
+width: 100%;
+font-family: 'UniversCond';
+position: relative;
+top: 7px;
 }
 
 #cbar-img img{
