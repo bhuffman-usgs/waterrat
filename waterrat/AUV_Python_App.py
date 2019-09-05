@@ -363,30 +363,28 @@ del rounder, thal_d, tck, u, ns, spl_x, spl_y, dist, min_d, max_d, d_if, td
 # Check divisions of river width and set to a division that yields no remainder that is closest to the original division
 halfWidth = (riv_w/2)
 if halfWidth % dy != 0:
-    halfWidth = fdun(halfWidth, dy, 1.0)
+    halfWidth = fdun(halfWidth, halfWidth, dy, 1.0)
     riv_w = halfWidth*2
 # Set number of intervals for the lateral axis
 ny = ((riv_w)/dy) + 1
 while int(ny) < (swid - 1):
-    dy = fdd(riv_w, dy, 5)
+    dy = fdd(riv_w, dy, dy, 5)
     ny = ((riv_w)/dy) + 1
 # Set the lateral grid points
 ygrid_vec = np.linspace(-1*(riv_w/2), (riv_w/2), int(ny))
 y_cen = ((ygrid_vec.shape[0] - 1)/2)
 
 # Get a floored even value for the minimum depth (deepest)
-z_floor_even = abs(math.floor(min(z)/2)*2)
+z_floor_even = abs(math.floor(min(z)/0.25)*0.25)
 # Set number of intervals for the vertical axis
-if dz <= 0.5:
-    dz = 0.5
-else:
-    if dz < 1.0:
-        dz = 1.0
-    dz = find_div(z_floor_even, dz, 1.0)
+dz_org = dz
+dz = find_div(z_floor_even, dz, 0.25)
 nz = (z_floor_even/dz) + 1
 while int(nz) < (swid - 1):
-    dz = fdd(z_floor_even, nz, 1.0)
+    dz = fdd(z_floor_even, dz, dz, 0.25)
     nz = ((z_floor_even)/dz) + 1
+if dz_org != dz:
+    print("A dz value of %.1f is too large for this dataset.  The value will be set to %.1f." % (dz_org, dz))
 # Set the vertical grid points
 zgrid_vec = np.linspace(-z_floor_even, 0.0, int(nz))
 # Flip the vector
@@ -680,8 +678,6 @@ topo_fig = {
 ### Setup the layouts for the 3d figure ###
 # Build the 3d plot layout settings
 lay_3d = go.Layout(
-    # Add plot title
-    title = '3D View',
     # Set plot font family and size
     font = dict(
         family = 'UniversCond',
@@ -1005,7 +1001,7 @@ app.layout = html.Div([
                                             dcc.Checklist(
                                                 # Use id for .css and callbacks
                                                 id = 'checkboxes',
-                                                className = 'col',
+                                                className = 'col-5',
                                                 # Make the options dictionary for model wireframe, auv track and bed depth
                                                 # Use prime number values for the options (for summing to unique cases)
                                                 options = [
@@ -1015,7 +1011,38 @@ app.layout = html.Div([
                                                 ],
                                                 # Set to empty initially (none of the options displayed)
                                                 values = []
-                                            )
+                                            ),
+                                            html.Div(
+                                                className = 'col-3',
+                                                children = [
+                                                    html.Div(
+                                                        className = 'row',
+                                                        id = 'aspect_z',
+                                                        children = [
+                                                            html.Div(
+                                                                className = 'col-9',
+                                                                children = [
+                                                                    html.P(
+                                                                        'Vertical Aspect Ratio :'
+                                                                    )
+                                                                ]
+                                                            ),
+                                                            html.Div(
+                                                                className = 'col-3',
+                                                                children = [
+                                                                    dcc.Input(
+                                                                        id = 'aspect_z_input', 
+                                                                        type = 'number',
+                                                                        inputmode = 'numeric',
+                                                                        debounce = True,
+                                                                        value = asp_z
+                                                                    ) 
+                                                                ]
+                                                            )
+                                                        ]
+                                                    )
+                                                ]
+					    )
                                         ]
                                     ),
                                     html.Div(
@@ -1382,7 +1409,6 @@ app.layout = html.Div([
                                         id = 'cbar-lbound', 
                                         type = 'number',
                                         inputmode = 'numeric',
-                                        min = 0.1,
                                         debounce = True
                                     )
                                 ]
@@ -1415,7 +1441,7 @@ app.layout = html.Div([
 # Callback to set the colorbar upper/lower bound initial values, step increments and 
 #   the lower bound minimum input value
 @app.callback(
-    [dashOut('cbar-ubound', 'value'), dashOut('cbar-lbound', 'value'), dashOut('cbar-ubound', 'step'), dashOut('cbar-lbound', 'step'), dashOut('cbar-lbound', 'min')],
+    [dashOut('cbar-ubound', 'value'), dashOut('cbar-lbound', 'value'), dashOut('cbar-ubound', 'step'), dashOut('cbar-lbound', 'step')],
     [dashIn('main-param', 'value')]
 )
 def paramChange_inputBoundSetup(param_idx):
@@ -1430,7 +1456,7 @@ def paramChange_inputBoundSetup(param_idx):
         else:
             step = master_reso[param_idx][0][0]
 
-    return ini_ubound, ini_lbound, step, step, step
+    return ini_ubound, ini_lbound, step, step
 
 # Callback to reset the number of clicks for the "Update Bounds" button
 @app.callback(
@@ -1528,10 +1554,10 @@ def update_colorbar(param_idx, message, cb_upper, cb_lower, click):
 # Updates Main 3D figure when parameter dropbox or checkboxes change
 @app.callback(
     dashOut('main-graph', 'figure'),
-    [dashIn('main-param', 'value'), dashIn('checkboxes', 'values'), dashIn('cbar', 'src')],
+    [dashIn('main-param', 'value'), dashIn('checkboxes', 'values'), dashIn('cbar', 'src'), dashIn('aspect_z_input', 'value')],
     state = [dashState('cbar-ubound', 'value'), dashState('cbar-lbound', 'value')]
 )
-def update_3d_traces(param_idx, checkbox_values, cbimg, cb_upper, cb_lower):
+def update_3d_traces(param_idx, checkbox_values, cbimg, aspect_z, cb_upper, cb_lower):
     if cbimg != None:
         # Turn all the current checkbox values into integers
         checkbox_values = [int(s) for s in checkbox_values]
@@ -1691,6 +1717,9 @@ def update_3d_traces(param_idx, checkbox_values, cbimg, cb_upper, cb_lower):
         if lmc2 == 1:
             for landmark in lm2:
                 dat1.append(landmark)
+		
+        # Get the current vertical aspect ratio
+        lay_3d.scene.aspectratio.z = (aspect_z*(abs(np.max(zgrid) - np.min(zgrid))/asp_div))
 
         # Return the 3d figure w/ the current parameter and checkbox options
         return go.Figure(data = dat1, layout = lay_3d)
