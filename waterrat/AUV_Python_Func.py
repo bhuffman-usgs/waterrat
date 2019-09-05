@@ -663,9 +663,9 @@ def find_div(n, m, i):
     # Round m to the nearest value divisible by i
     m = round(m/i)*i
     # Get upper nearest number to m that divides n
-    m1 = fdu(n, m, i)
+    m1 = fdu(n, m, m, i)
     # Get lower nearest number to m that divides n
-    m2 = fdd(n, m, i)
+    m2 = fdd(n, m, m, i)
 
     # Find if m1 is closer to m than m2...
     if abs(m - m1) <= abs(m - m2):
@@ -676,34 +676,44 @@ def find_div(n, m, i):
         # If so, return m2
         return m2
 
-# Recursive function to find nearest number above m that divides n with no remainder
-def fdu(n, m, i):
-    # if modulus doesnt equal 0
-    if (n % m) != 0:
-        # call function again using m + i
-        return fdu(n, (m + i), i)
-    # if modulus equals 0
-    elif (n % m) == 0:
-        # return new m
-        return m
+# Recursive function to find nearest number above mo that divides n with no remainder
+def fdu(n, mo, m, i):
+    # If the number to divide n by is less than n, run algorithm
+    if mo <= n:
+        # if modulus doesnt equal 0
+        if ((n % m) != 0) or (mo == m):
+            # call function again using m + i
+            return fdu(n, mo, (m + i), i)
+        # if modulus equals 0
+        elif (n % m) == 0:
+            # return new m
+            return m
+    # Otherwise the modulus will never be 0, so return the number to be divided
+    else:
+        return n
 
-# Recursive function to find the nearest number below m that divides n with no remainder
-def fdd(n, m, i):
-    # if modulus doesnt equal 0
-    if (n % m) != 0:
-        # call function again using m + i
-        return fdd(n, (m - i), i)
-    # if modulus equals 0
-    elif (n % m) == 0:
-        # return new m
-        return m
+# Recursive function to find the nearest number below mo that divides n with no remainder
+def fdd(n, mo, m, i):
+    # If the number to divide n by is less than n, run algorithm
+    if mo <= n:
+        # if modulus doesnt equal 0
+        if ((n % m) != 0) or (mo == m):
+            # call function again using m + i
+            return fdd(n, mo, (m - i), i)
+        # if modulus equals 0
+        elif (n % m) == 0:
+            # return new m
+            return m
+    # Otherwise the modulus will never be 0, so return the number to be divided
+    else:
+        return n
 
 # Recursive function to find nearest number above n that m divides with no remainder
-def fdun(n, m, i):
+def fdun(n, no, m, i):
     # if modulus doesnt equal 0
-    if (n % m) != 0:
+    if ((n % m) != 0) or (n == no):
         # call function again using n + i
-        return fdun((n + i), m, i)
+        return fdun((n + i), no, m, i)
     # if modulus equals 0
     elif (n % m) == 0:
         # return new n
