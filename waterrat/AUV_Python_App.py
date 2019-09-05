@@ -383,7 +383,7 @@ nz = (z_floor_even/dz) + 1
 while int(nz) < (swid - 1):
     dz = fdd(z_floor_even, dz, dz, 0.25)
     nz = ((z_floor_even)/dz) + 1
-if dz_org != dz:
+if dz_org > dz:
     print("A dz value of %.1f is too large for this dataset.  The value will be set to %.1f." % (dz_org, dz))
 # Set the vertical grid points
 zgrid_vec = np.linspace(-z_floor_even, 0.0, int(nz))
