@@ -374,24 +374,39 @@ while int(ny) < (swid - 1):
 ygrid_vec = np.linspace(-1*(riv_w/2), (riv_w/2), int(ny))
 y_cen = ((ygrid_vec.shape[0] - 1)/2)
 
-# Get a floored even value for the minimum depth (deepest)
-z_floor_even = abs(math.floor(min(z)/0.25)*0.25)
-# Set number of intervals for the vertical axis
-dz_org = dz
-dz = find_div(z_floor_even, dz, 0.25)
-nz = (z_floor_even/dz) + 1
-while int(nz) < (swid - 1):
-    dz = fdd(z_floor_even, dz, dz, 0.25)
-    nz = ((z_floor_even)/dz) + 1
-if dz_org > dz:
-    print("A dz value of %.1f is too large for this dataset.  The value will be set to %.1f." % (dz_org, dz))
+def discretize_for_slider(xrng, dx, inter, i):
+    # Normalize the range by the intervals
+    xrng = int(xrng/inter)
+    # Get the dx value as an integer, normalized by the intervals
+    dx = int(dx/inter)
+    # If the dx value is less than the interval
+    if dx == 0:
+        dx = 1
+    # Verify dx divides xrng with no remainder, if not find the nearest value that does
+    if xrng % dx != 0:
+        dx = find_div(xrng, dx, 1)
+    # If the number of ticks is less than the number of slider ticks...
+    while int((xrng/dx) + 1) < (i - 1):
+        # Find the next smaller dx that divides xrng with no remainder
+        dx = fdd(xrng, dx, dx, 1)
+    # Return dx and the number of ticks
+    return (dx*inter), int((xrng/dx) + 1)
+
+# Get the deepest value in the array
+zrng = math.ceil(-min(z))
+# Define the intervals that dz can move in
+inter = 0.1
+dznew, nz = discretize_for_slider(zrng, dz, inter, swid)
+if dznew != dz:
+    print("A dz value of %.1f is not compatible for this dataset.  The value will be set to %.1f." % (dz, dznew))
+    dz = dznew
 # Set the vertical grid points
-zgrid_vec = np.linspace(-z_floor_even, 0.0, int(nz))
+zgrid_vec = np.linspace(-zrng, 0.0, nz)
 # Flip the vector
 zgrid_vec = zgrid_vec[::-1]
 
 # Remove variables from memory
-del riv_w, dy, dz, ny, nz
+del riv_w, dy, dz, ny, nz, zrng, inter, dznew
 ##########################################
 cells = len(xgrid_vec)*len(ygrid_vec)*len(zgrid_vec)
 if 15000 > cells and cells >= 10000: print("Building %d Cells:\nExpect a slight delay in figure loading times." % cells)
