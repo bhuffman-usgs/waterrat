@@ -249,9 +249,11 @@ for i in range((len(thal_x) - 1), 0, -1):
         # Exit the loop
         break
 
-while (iEnd - iStart) < 4:
-    iStart -= 1
-    iEnd += 1
+while (iEnd - iStart) < 4 or (iStart != 0 and iEnd != (len(thal_x) - 1)):
+    if iStart > 0:
+        iStart -= 1
+    if iEnd < (len(thal_x) - 1):
+        iEnd += 1
 
 # Use the iStart and iEnd indices to focus the model area
 thal_x = thal_x[iStart:iEnd]
