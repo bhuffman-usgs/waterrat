@@ -200,10 +200,11 @@ if lmc2 == 1:
     del lm2_lon, lm2_lat
 
 # Get the min and max coordinates for the AUV track
-xlow = min(x)
-xhigh = max(x)
-ylow = min(y)
-yhigh = max(y)
+buffer = 200
+xlow = min(x) - buffer
+xhigh = max(x) + buffer
+ylow = min(y) - buffer
+yhigh = max(y) + buffer
 
 # Loop over the thalwag and check if the points are within the AUV tracks bounding box
 for i in range(0, len(thal_x)):
@@ -249,11 +250,13 @@ for i in range((len(thal_x) - 1), 0, -1):
         # Exit the loop
         break
 
-while (iEnd - iStart) < 4 or (iStart != 0 and iEnd != (len(thal_x) - 1)):
+while (iEnd - iStart) < 4:
     if iStart > 0:
         iStart -= 1
     if iEnd < (len(thal_x) - 1):
         iEnd += 1
+    if (iStart == 0) and (iEnd == (len(thal_x) - 1)):
+        break
 
 # Use the iStart and iEnd indices to focus the model area
 thal_x = thal_x[iStart:iEnd]
