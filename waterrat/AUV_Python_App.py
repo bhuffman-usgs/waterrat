@@ -5,7 +5,7 @@ from matplotlib import pyplot as plt
 from matplotlib.colors import ListedColormap, BoundaryNorm
 from matplotlib.colorbar import ColorbarBase
 import os, sys, pyproj, utm, math, json, configparser
-from .AUV_Python_Func import stringSubReplace, fDialog, case_load, voxelAlpha, voxelMat, euc_dist, equal_dist, find_div, fdd, fdun, curvey_grid, centroid_2D, generateColorbar, tickval2text, lay_2d, areaArbTri, mplToURI, indexByBin
+from .AUV_Python_Func import stringSubReplace, fDialog, case_load, voxelAlpha, voxelMat, euc_dist, equal_dist, find_div, fdd, fdun, curvey_grid, centroid_2D, generateColorbar, tickval2text, lay_2d, mplToURI, indexByBin, precalcPolygon, pointInPolygon
 import plotly.graph_objs as go
 from scipy.interpolate import griddata as griddata
 from scipy import interpolate as interp
@@ -199,68 +199,6 @@ if lmc2 == 1:
     # Remove the landmark lat/lon coordinates from memory
     del lm2_lon, lm2_lat
 
-# Get the min and max coordinates for the AUV track
-buffer = 200
-xlow = min(x) - buffer
-xhigh = max(x) + buffer
-ylow = min(y) - buffer
-yhigh = max(y) + buffer
-
-# Loop over the thalwag and check if the points are within the AUV tracks bounding box
-for i in range(0, len(thal_x)):
-    # A = (xlow, ylow) , B = (xlow, yhigh) , C = (xhigh, yhigh) , D = (xhigh, ylow)
-    # P = (tx, ty)
-    tx = thal_x[i]
-    ty = thal_y[i]
-    # Calculate the sum of the areas of APD, DPC, CPB and PBA
-    triSum = areaArbTri(xlow, ylow, tx, ty, xhigh, ylow) + areaArbTri(xhigh, ylow, tx, ty, xhigh, yhigh) + areaArbTri(xhigh, yhigh, tx, ty, xlow, yhigh) + areaArbTri(tx, ty, xlow, yhigh, xlow, ylow)
-    # Calculate the area of ABCD or the sum of the areas of ABC and ACD
-    rectSum = areaArbTri(xlow, ylow, xlow, yhigh, xhigh, yhigh) + areaArbTri(xlow, ylow, xhigh, yhigh, xhigh, ylow)
-
-    # If the sum of the area of the triangles with point P is greater than the area of the rectangle 
-    #   then P is outside the rectangle (So if the diff is less than 0.001 then P is inside)
-    if ((triSum - rectSum) < 0.001):
-        if (i != 0):
-            # Use the previous points index
-            iStart = i - 1
-        else:
-            iStart = 0
-        # Exit the loop
-        break
-# Loop backwards over the thalwag and check if the points are within the AUV tracks bounding box
-for i in range((len(thal_x) - 1), 0, -1):
-    # A = (xlow, ylow) , B = (xlow, yhigh) , C = (xhigh, yhigh) , D = (xhigh, ylow)
-    # P = (tx, ty)
-    tx = thal_x[i]
-    ty = thal_y[i]
-    # Calculate the sum of the areas of APD, DPC, CPB and PBA
-    triSum = areaArbTri(xlow, ylow, tx, ty, xhigh, ylow) + areaArbTri(xhigh, ylow, tx, ty, xhigh, yhigh) + areaArbTri(xhigh, yhigh, tx, ty, xlow, yhigh) + areaArbTri(tx, ty, xlow, yhigh, xlow, ylow)
-    # Calculate the area of ABCD or the sum of the areas of ABC and ACD
-    rectSum = areaArbTri(xlow, ylow, xlow, yhigh, xhigh, yhigh) + areaArbTri(xlow, ylow, xhigh, yhigh, xhigh, ylow)
-
-    # If the sum of the area of the triangles with point P 
-    #   is greater than the area of the rectangle then
-    #   P is outside the rectangle
-    if ((triSum - rectSum) < 0.001):
-        if (i != (len(thal_x) - 1)):
-            # Use next point
-            iEnd = i + 1
-        else:
-            iEnd = i
-        # Exit the loop
-        break
-
-while (iEnd - iStart) < 4:
-    if iStart > 0:
-        iStart -= 1
-    if iEnd < (len(thal_x) - 1):
-        iEnd += 1
-    if (iStart == 0) and (iEnd == (len(thal_x) - 1)):
-        break
-
-# Use the iStart and iEnd indices to focus the model area
-thal_x = thal_x[iStart:iEnd]
-thal_y = thal_y[iStart:iEnd]
 # Assign the base values for x and y
 base_x = thal_x[0]
 base_y = thal_y[0]
@@ -277,7 +215,7 @@ if lmc2 == 1:
     lm2_y = lm2_y - base_y
 
 # Put a splined fit through the thalwag points (two-part spline from SciPy)
-tck, u = interp.splprep([thal_x, thal_y], s=0)
+tck, u = interp.splprep([thal_x, thal_y], s = 0)
 ns = 100
 spl_x, spl_y = interp.splev(np.linspace(0, 1, ns), tck)
 # Get the euclidean distances from the spline points
@@ -361,7 +299,7 @@ rounder = lambda t: (round(t/dx)*dx)
 # Take the thalwag distance array, perform a cummulative sum on it, and round off the decimal place
 xgrid_vec = np.array([rounder(x) for x in np.cumsum(thal_d)])
 # Clear the rounder function and thalwag distance variable and remove other variables
-del rounder, thal_d, tck, u, ns, spl_x, spl_y, dist, min_d, max_d, d_if, td
+del tck, u, ns, spl_x, spl_y, dist, min_d, max_d, d_if, td
 #########################################################################################################
 
 ### Create the x, y and z grid vectors ###
@@ -413,7 +351,82 @@ zgrid_vec = zgrid_vec[::-1]
 # Remove variables from memory
 del riv_w, dy, dz, ny, nz, zrng, inter, dznew
 ##########################################
+
+### Construct the curvilinear grid and the alpha array ###
+# Using the axis vectors and the x-grid's cartesian coordinates, build a curvilinear grid system
+xgrid, ygrid, zgrid = curvey_grid(thal_x, thal_y, m_norm, b_norm, xgrid_vec, ygrid_vec, zgrid_vec)
+
+# Move down the thalwag bounding box and find when the AUV track points arent inside
+for i in range(0, xgrid.shape[0]):
+    polyX = np.concatenate((xgrid[i, :, 0], xgrid[i:, -1, 0], np.flip(xgrid[-1, :, 0]), np.flip(xgrid[i:, 0, 0])))
+    polyY = np.concatenate((ygrid[i, :, 0], ygrid[i:, -1, 0], np.flip(ygrid[-1, :, 0]), np.flip(ygrid[i:, 0, 0])))
+
+    # Get the constants and multipliers for this polygon
+    const, mult = precalcPolygon(polyX, polyY)
+    # Loop over all the AUV track points
+    for xi, yi in zip(x, y):
+        # Check if the point is inside the polygon
+        boo = pointInPolygon(xi, yi, const, mult, polyY)
+        # If not, exit the loop
+        if not boo:
+            break
+
+    # If any point was not inside the polygon...
+    if not boo:
+        # Use the previous index
+        iStart = i - 1
+        if (i < 1):
+            # Use the first index
+            iStart = 0
+        # Exit the loop
+        break
+
+# Move up the thalwag bounding box and find when the AUV track points arent inside
+for i in range(xgrid.shape[0] - 1, -1, -1):
+    polyX = np.concatenate((xgrid[0, :, 0], xgrid[:i, -1, 0], np.flip(xgrid[i, :, 0]), np.flip(xgrid[:i, 0, 0])))
+    polyY = np.concatenate((ygrid[0, :, 0], ygrid[:i, -1, 0], np.flip(ygrid[i, :, 0]), np.flip(ygrid[:i, 0, 0])))
+
+    # Get the constants and multipliers for this polygon
+    const, mult = precalcPolygon(polyX, polyY)
+    # Loop over all the AUV track points
+    for xi, yi in zip(x, y):
+        # Check if the point is inside the polygon
+        boo = pointInPolygon(xi, yi, const, mult, polyY)
+        # If not, exit the loop
+        if not boo:
+            break
+    # If any point was not inside the polygon...
+    if not boo:
+        # Use the next next index
+        iEnd = i + 2
+        if (i > (len(thal_x) - 3)):
+            # Use the last index
+            iEnd = len(thal_x) - 1
+        # Exit the loop
+        break
+
+# Trim the x and y thalwag vectors and their slope/intercept vectors
+thal_x = thal_x[iStart:iEnd]
+thal_y = thal_y[iStart:iEnd]
+m_norm = m_norm[iStart:iEnd]
+b_norm = b_norm[iStart:iEnd]
+# Generate the distance axis along the thalwag for a grid axis
+thal_d = euc_dist(thal_x, thal_y)
+# Take the thalwag distance array, perform a cummulative sum on it, and round off the decimal place
+xgrid_vec = np.array([rounder(x) for x in np.cumsum(thal_d)])
+
+# Using the axis vectors and the x-grid's cartesian coordinates, rebuild the curvilinear grid system
+xgrid, ygrid, zgrid = curvey_grid(thal_x, thal_y, m_norm, b_norm, xgrid_vec, ygrid_vec, zgrid_vec)
+# Get the center index for the y axis of the curvilinear grid
+y_cen = int((ygrid.shape[1] - 1)/2)
+# Make a 3D transparency array
+alpha = voxelAlpha(xgrid.shape, 1)
+# Clear variables from memory
+del thal_x, thal_y, thal_d, rounder, m_norm, b_norm
+
+# Prompt the user with a warning on the model size
 cells = len(xgrid_vec)*len(ygrid_vec)*len(zgrid_vec)
+if 10000 > cells: print("Building %d Cells:\nNo delay expected in figure loading times." % cells)
 if 15000 > cells and cells >= 10000: print("Building %d Cells:\nExpect a slight delay in figure loading times." % cells)
 if 20000 > cells and cells >= 15000: print("Building %d Cells:\nExpect a moderate delay in figure loading times." % cells)
 if 200000 > cells and cells >= 20000: print("Building %d Cells:\nExpect a severe delay in figure loading times.\nIt is suggested to increase dx, dy or dz in the config.ini file." % cells)
@@ -436,21 +449,9 @@ for i, j in enumerate(zgrid_vec):
     zdict[i] = ('%.2f' % j)
 # Remove iterators from memory
 del i, j
-############################################
-
-### Construct the curvilinear grid and the alpha array ###
-# Using the axis vectors and the x-grid's cartesian coordinates, build a curvilinear grid system
-xgrid, ygrid, zgrid = curvey_grid(thal_x, thal_y, m_norm, b_norm, xgrid_vec, ygrid_vec, zgrid_vec)
-# Get the center index for the ygrid
-y_cen = int((xgrid.shape[1] - 1)/2)
-# Make a 3D transparency array
-alpha = voxelAlpha(xgrid.shape, 1)
-
-# Remove variables from memory
-del thal_x, thal_y, m_norm, b_norm
 ##########################################################
 
-### Construct a trace around the curvey grid for the mapbox ###
+### Construct a trace around the curvey grid and a trace of the auv path for the mapbox ###
 # Trim the x, y and z grids down to the outer x and y boundaries and the z boundary to the surface
 # This will make a trace around the gridded domain at z = 0 for input into the mapbox
 # [0, :, 0] = positions at the upstream most point across the river from left bank to right at the surface
@@ -470,22 +471,26 @@ del xbox, ybox
 # Build a list of the sequential x/y coordiantes prior to conversion from utm - base station value
 border_xy = [[xb, yb] for xb, yb in zip(xborder, yborder)]
 
-# Add back the base x and y values and reconvert the border/centroid points back to meters
+# Add back the base x and y values and reconvert the points back to meters
 xborder = (xborder + base_x)/3.28084
 yborder = (yborder + base_y)/3.28084
 xbox_cen = (xbox_cen + base_x)/3.28084
 ybox_cen = (ybox_cen + base_y)/3.28084
+xpath = (x + base_x)/3.28084
+ypath = (y + base_y)/3.28084
 
 # Now with our units back into meters, transform the points back into lat/lon coordinates
 #   This is necessary for the values to be fed into mapbox
 lonborder, latborder = p(xborder, yborder, inverse = True)
 lonbox_cen, latbox_cen = p(xbox_cen, ybox_cen, inverse = True)
+lonpath, latpath = p(xpath, ypath, inverse = True)
 
 # Build a list of the sequential lat/lon coordinates
 border = [[lon, lat] for lon, lat in zip(lonborder, latborder)]
+path = [[lon, lat] for lon, lat in zip(lonpath, latpath)]
 
 # Remove the utm coordinate variables and the unpackaged lon/lat border variables from memory
-del p, zone, base_x, base_y, xborder, yborder, xbox_cen, ybox_cen, lonborder, latborder
+del p, zone, base_x, base_y, xborder, yborder, xbox_cen, ybox_cen, lonborder, latborder, lonpath, latpath
 ################################################
 
 ### Build the bathymetry for the 3d plot ###
@@ -645,6 +650,14 @@ geo_box = {
 		"coordinates" : border
 	}
 }
+geo_path = {
+	"type" : "Feature",
+	"properties" : {},
+	"geometry" : {
+		"type" : "LineString",
+		"coordinates" : path
+	}
+}
 
 # Make the mapbox plotly figure as a geojson type dictionary
 topo_fig = {
@@ -689,7 +702,14 @@ topo_fig = {
 				"type" : "line",
                 # Set the line color
 				"color" : "rgb(245, 24, 113)"
-			}]
+			}, {
+                "sourcetype" : "geojson",
+				"source" : geo_path,
+                # Draw a line with the coordinates
+				"type" : "line",
+                # Set the line color
+				"color" : "rgb(1, 53, 225)"
+            }]
 		}
 	}
 }
