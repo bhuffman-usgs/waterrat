@@ -1048,12 +1048,6 @@ def lay_2d(f_title, x_title, y_title, f_margin, x_range, x_tickvals, x_ticktext,
     # Return the plotly layout object
     return lay 
 
-# Function to calculate the area of a triangle with
-#   arbitrary coordinates
-def areaArbTri(ax, ay, bx, by, cx, cy):
-    area = abs(((ax*(by - cy)) + (bx*(cy - ay)) + (cx*(ay - by)))/2)
-    return area
-
 # Function to convert a matplotlib figure to a base64 encoded data URI
 #   for use with the Dash application as an html image tag
 def mplToURI(fig, close_all = True, **save_args):
