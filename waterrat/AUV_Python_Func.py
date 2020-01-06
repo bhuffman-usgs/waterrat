@@ -587,7 +587,7 @@ def euc_dist(x, y, z = np.asarray([])):
 #   Added modification to output normal slope-intercept line coefficients (m and b) at each equally spaced point
 def equal_dist(x, y, td, dd):
     # Get number of points given the number of line segments plus one
-    pnts = int((td/dd) + 1)
+    pnts = int((td/dd))
 
     # Initialize the output point sets
     x_out = np.zeros(pnts)
@@ -599,9 +599,8 @@ def equal_dist(x, y, td, dd):
     loc = np.array((x, y)).T
     # Initialize a counter variable
     k = 0
-
-    # Loop over the input point set
-    for i, j in enumerate(loc):
+    # Loop over the input points
+    for i in range(0, len(loc)):
         # If not the first point the input set...
         if (i >= 1) and (k < pnts): 
             # Find distance from the seg_start
@@ -1147,4 +1146,31 @@ def indexByBin(data, bounds):
     
     # Return the nested lists of indices for the binned data
     return bin_idx
+
+def precalcPolygon(polyX, polyY):
+    const = np.empty(polyX.shape)
+    mult = np.empty(polyX.shape)
+    j = len(polyX) - 1
+
+    for i, (px, py) in enumerate(zip(polyX, polyY)):
+        if polyY[j] == py:
+            const[i] = px
+            mult[i] = 0
+        else:
+            const[i] = px - (py*polyX[j])/(polyY[j] - py) + (py*px)/(polyY[j] - py)
+            mult[i] = (polyX[j] - px)/(polyY[j] - py)
+        j = i
+    
+    return const, mult
+
+def pointInPolygon(x, y, const, mult, polyY):
+    boo = False
+    curr = polyY[-1] > y
+    for c, m, py in zip(const, mult, polyY):
+        prev = curr
+        curr = py > y
+        if curr != prev:
+            boo ^= y*m + c < x
+
+    return boo
 ########################################################################
