@@ -9,7 +9,9 @@ The application was developed in Python 3.6 on a Windows 10 Operating System and
 
 ## Example Data
 
-Examples of datasets that can be viewed using the WaterRAT are available at https://doi.org/10.5066/P9TT9C9T
+Available datasets that can be viewed using WaterRAT can be found here:
+* **Savannah River Sites** - https://www.sciencebase.gov/catalog/item/5c8c21cfe4b0938824529ffd
+* **Deleware River Sites** - https://www.sciencebase.gov/catalog/item/5e96131b82ce172707f2542b
 
 ## How to Install Python 3.6 (and up)
 
