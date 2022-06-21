@@ -13,7 +13,7 @@ setup(
     include_package_data = True,
     install_requires = [
         'plotly == 3.1.0',
-        'numpy == 1.15.0',
+        'numpy == 1.22.0',
         'scipy == 1.1.0',
         'pandas == 0.23.3',
         'pyproj == 1.9.6',
