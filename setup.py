@@ -14,7 +14,7 @@ setup(
     install_requires = [
         'plotly == 3.1.0',
         'numpy == 1.15.0',
-        'scipy == 1.1.0',
+        'scipy == 1.10.0',
         'pandas == 0.23.3',
         'pyproj == 1.9.6',
         'utm == 0.4.2',
